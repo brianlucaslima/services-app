@@ -27,7 +27,7 @@
             font-size: 20px;
             font-weight: bold;
             text-transform: uppercase;
-            color: #ef4444; /* red-500 */
+            color: {{ $company->primary_color ?? '#ef4444' }};
         }
         .company-details {
             float: left;
@@ -60,7 +60,7 @@
             margin-top: 5px;
         }
         .summary-value.payout {
-            color: #ef4444;
+            color: {{ $company->primary_color ?? '#ef4444' }};
         }
         table {
             width: 100%;

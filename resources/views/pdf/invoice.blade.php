@@ -27,7 +27,7 @@
             font-size: 24px;
             font-weight: bold;
             text-transform: uppercase;
-            color: #18181b;
+            color: {{ $invoice->company->primary_color ?? '#18181b' }};
             letter-spacing: 1px;
         }
         .company-logo {
@@ -167,7 +167,6 @@
             <div style="margin-top: 5px; color: #71717a; font-size: 11px;">
                 <strong>{{ __('Invoice Number') }}:</strong> {{ $invoice->number }}<br>
                 <strong>{{ __('Date') }}:</strong> {{ $invoice->date->format('d/m/Y') }}<br>
-                <strong>{{ __('Status') }}:</strong> <span class="badge badge-{{ $invoice->status }}">{{ __($invoice->status) }}</span>
             </div>
         </div>
         <div class="clearfix"></div>

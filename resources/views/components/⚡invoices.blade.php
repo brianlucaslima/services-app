@@ -194,12 +194,14 @@ new class extends Component
         }
 
         $invoice = DB::transaction(function() {
-            // Simple invoice number generation
-            $count = Invoice::where('company_id', auth()->user()->company->id)->count() + 1;
-            $number = 'INV-' . now()->format('Y') . '-' . str_pad($count, 4, '0', STR_PAD_LEFT);
+            $company = auth()->user()->company;
+            $startNum = $company->invoice_start_number ?? 1;
+            $count = Invoice::where('company_id', $company->id)->count();
+            $nextNum = $startNum + $count;
+            $number = 'INV-' . str_pad($nextNum, 4, '0', STR_PAD_LEFT);
 
             $invoice = Invoice::create([
-                'company_id' => auth()->user()->company->id,
+                'company_id' => $company->id,
                 'customer_id' => $this->selectedCustomerId,
                 'number' => $number,
                 'date' => $this->invoiceDate,

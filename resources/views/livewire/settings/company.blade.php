@@ -35,6 +35,21 @@
                 <flux:input wire:model="address" />
                 <flux:error name="address" />
             </flux:field>
+
+            <flux:field>
+                <flux:label>{{ __('Branding Color') }}</flux:label>
+                <div class="flex gap-2 items-center">
+                    <input type="color" wire:model="primary_color" class="w-10 h-10 border border-zinc-200 dark:border-zinc-700 rounded-lg cursor-pointer p-0 bg-transparent" />
+                    <flux:input wire:model="primary_color" class="flex-1" />
+                </div>
+                <flux:error name="primary_color" />
+            </flux:field>
+
+            <flux:field>
+                <flux:label>{{ __('Invoice Start Number') }}</flux:label>
+                <flux:input type="number" wire:model="invoice_start_number" min="1" />
+                <flux:error name="invoice_start_number" />
+            </flux:field>
         </div>
 
         <flux:separator />

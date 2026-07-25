@@ -226,5 +226,10 @@
     "Please make bank transfer to the following account": "Por favor, faça uma transferência bancária para a seguinte conta",
     "Invoice generated on": "Fatura gerada em",
     "INVOICE": "FATURA",
-    "All Customers": "Todos os Clientes"
+    "All Customers": "Todos os Clientes",
+    "Branding Color": "Cor da Identidade Visual",
+    "Invoice Start Number": "Número Inicial das Faturas",
+    "Preferred Language": "Idioma Preferido",
+    "English (UK)": "Inglês (Reino Unido)",
+    "Português (Brasil)": "Português (Brasil)"
 }

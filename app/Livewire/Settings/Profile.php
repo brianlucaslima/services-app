@@ -19,6 +19,8 @@ class Profile extends Component
 
     public string $email = '';
 
+    public string $locale = 'en_GB';
+
     /**
      * Mount the component.
      */
@@ -26,6 +28,7 @@ class Profile extends Component
     {
         $this->name = Auth::user()->name;
         $this->email = Auth::user()->email;
+        $this->locale = Auth::user()->locale ?? 'en_GB';
     }
 
     /**
@@ -35,7 +38,10 @@ class Profile extends Component
     {
         $user = Auth::user();
 
-        $validated = $this->validate($this->profileRules($user->id));
+        $rules = $this->profileRules($user->id);
+        $rules['locale'] = 'required|in:en_GB,pt_BR';
+
+        $validated = $this->validate($rules);
 
         $user->fill($validated);
 
@@ -46,6 +52,8 @@ class Profile extends Component
         $user->save();
 
         Flux::toast(variant: 'success', text: __('Profile updated.'));
+
+        $this->redirect(route('profile.edit'), navigate: true);
     }
 
     /**

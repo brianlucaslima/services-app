@@ -19,6 +19,8 @@ class Company extends Model
         'payment_account_number',
         'payment_sort_code',
         'default_invoice_message',
+        'primary_color',
+        'invoice_start_number',
     ];
 
     public function user(): BelongsTo
