@@ -17,6 +17,18 @@
                         {{ __('Dashboard') }}
                     </flux:sidebar.item>
 
+                    <flux:sidebar.item icon="calendar" :href="route('agenda')" :current="request()->routeIs('agenda')" wire:navigate>
+                        {{ __('Agenda') }}
+                    </flux:sidebar.item>
+
+                    <flux:sidebar.item icon="banknotes" :href="route('invoices')" :current="request()->routeIs('invoices')" wire:navigate>
+                        {{ __('Invoices') }}
+                    </flux:sidebar.item>
+
+                    <flux:sidebar.item icon="briefcase" :href="route('service-types')" :current="request()->routeIs('service-types')" wire:navigate>
+                        {{ __('Services') }}
+                    </flux:sidebar.item>
+
                     <flux:sidebar.item
                         :href="route('customers')"
                         :current="request()->routeIs('customers')"

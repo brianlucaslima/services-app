@@ -160,6 +160,10 @@ new class extends Component
                         </div>
 
                         <div class="flex items-center gap-x-3 border-t border-zinc-200 pt-3 dark:border-zinc-700/60 sm:border-t-0 sm:pt-0">
+                            <a href="{{ route('customers.addresses', ['id' => $customer['id']]) }}" wire:navigate class="flex-1 rounded-md bg-white px-3 py-1.5 text-center text-sm font-semibold text-zinc-900 shadow-sm ring-1 ring-inset ring-zinc-300 hover:bg-zinc-50 sm:flex-none dark:bg-zinc-800 dark:text-zinc-100 dark:ring-zinc-700 dark:hover:bg-zinc-700/50 transition flex items-center justify-center gap-2" title="{{ __('Addresses') }}">
+                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                                <span class="sm:hidden">{{ __('Addresses') }}</span>
+                            </a>
                             <a href="{{ route('customers.form', ['id' => $customer['id']]) }}" wire:navigate class="flex-1 rounded-md bg-white px-3 py-1.5 text-center text-sm font-semibold text-zinc-900 shadow-sm ring-1 ring-inset ring-zinc-300 hover:bg-zinc-50 sm:flex-none dark:bg-zinc-800 dark:text-zinc-100 dark:ring-zinc-700 dark:hover:bg-zinc-700/50 transition">
                                 {{ __('Edit') }}
                             </a>

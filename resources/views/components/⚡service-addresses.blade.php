@@ -1,0 +1,405 @@
+<?php
+
+use App\Models\Customer;
+use App\Models\ServiceAddress;
+use App\Models\ServiceSchedule;
+use App\Models\ServiceType;
+use Flux\Flux;
+use Livewire\Component;
+use Livewire\Attributes\Computed;
+
+new class extends Component
+{
+    public Customer $customer;
+    public $addresses = [];
+    
+    // Form fields for adding/editing address
+    public $addressId = null;
+    public $label = '';
+    public $address = '';
+    public $city = '';
+    public $zip_code = '';
+    public $start_date = '';
+    public $end_date = '';
+    public $duration_hours = 0;
+    public $hourly_rate = 0;
+    
+    // Schedules for the current address being edited
+    public $schedules = [];
+
+    public $showModal = false;
+
+    public function mount(int $id): void
+    {
+        $this->customer = Customer::findOrFail($id);
+        $this->refreshAddresses();
+    }
+
+    public function rendering($view): void
+    {
+        $view->title(__('Addresses') . ' - ' . $this->customer->name);
+    }
+
+    public function refreshAddresses(): void
+    {
+        $this->addresses = $this->customer->addresses()->with('schedules')->get()->toArray();
+    }
+
+    public function openCreateModal(): void
+    {
+        $this->resetForm();
+        $this->addSchedule(); // Start with one schedule
+        $this->showModal = true;
+    }
+
+    public function openEditModal(int $id): void
+    {
+        $this->resetForm();
+        $address = ServiceAddress::with('schedules')->findOrFail($id);
+        $this->addressId = $address->id;
+        $this->label = $address->label;
+        $this->address = $address->address;
+        $this->city = $address->city;
+        $this->zip_code = $address->zip_code;
+        $this->start_date = $address->start_date ? $address->start_date->format('Y-m-d') : '';
+        $this->end_date = $address->end_date ? $address->end_date->format('Y-m-d') : '';
+        $this->duration_hours = $address->duration_hours;
+        $this->hourly_rate = $address->hourly_rate;
+        
+        foreach ($address->schedules as $schedule) {
+            $this->schedules[] = [
+                'id' => $schedule->id,
+                'service_type_id' => $schedule->service_type_id,
+                'description' => $schedule->description ?? '',
+                'recurrence_type' => $schedule->recurrence_type,
+                'days_of_week' => $schedule->days_of_week ?? [],
+                'day_of_month' => $schedule->day_of_month,
+                'start_date' => $schedule->start_date->format('Y-m-d'),
+                'start_time' => $schedule->start_time,
+            ];
+        }
+        
+        if (empty($this->schedules)) {
+            $this->addSchedule();
+        }
+
+        $this->showModal = true;
+    }
+
+    public function resetForm(): void
+    {
+        $this->addressId = null;
+        $this->label = '';
+        $this->address = '';
+        $this->city = '';
+        $this->zip_code = '';
+        $this->start_date = now()->format('Y-m-d');
+        $this->end_date = '';
+        $this->duration_hours = 0;
+        $this->hourly_rate = 0;
+        $this->schedules = [];
+        $this->showModal = false;
+    }
+
+    public function addSchedule(): void
+    {
+        $this->schedules[] = [
+            'id' => null,
+            'service_type_id' => null,
+            'description' => '',
+            'recurrence_type' => 'weekly',
+            'days_of_week' => [],
+            'day_of_month' => null,
+            'start_date' => now()->format('Y-m-d'),
+            'start_time' => '08:00',
+        ];
+    }
+
+    public function removeSchedule(int $index): void
+    {
+        unset($this->schedules[$index]);
+        $this->schedules = array_values($this->schedules);
+    }
+
+    public function save(): void
+    {
+        $this->validate([
+            'label' => 'required|string|max:255',
+            'address' => 'required|string|max:255',
+            'start_date' => 'required|date',
+            'end_date' => 'nullable|date|after_or_equal:start_date',
+            'duration_hours' => 'required|numeric|min:0',
+            'hourly_rate' => 'required|numeric|min:0',
+            'schedules.*.recurrence_type' => 'required|in:once,weekly,fortnightly,monthly',
+            'schedules.*.start_date' => 'required|date',
+            'schedules.*.start_time' => 'required',
+        ]);
+
+        $address = $this->customer->addresses()->updateOrCreate(
+            ['id' => $this->addressId],
+            [
+                'label' => $this->label,
+                'address' => $this->address,
+                'city' => $this->city,
+                'zip_code' => $this->zip_code,
+                'start_date' => $this->start_date,
+                'end_date' => $this->end_date ?: null,
+                'duration_hours' => $this->duration_hours,
+                'hourly_rate' => $this->hourly_rate,
+            ]
+        );
+
+        $scheduleIds = [];
+                foreach ($this->schedules as $scheduleData) {
+                    $schedule = $address->schedules()->updateOrCreate(
+                        ['id' => $scheduleData['id']],
+                        [
+                            'service_type_id' => $scheduleData['service_type_id'],
+                            'description' => $scheduleData['description'],
+                            'recurrence_type' => $scheduleData['recurrence_type'],
+                            'days_of_week' => $scheduleData['days_of_week'],
+                            'day_of_month' => $scheduleData['day_of_month'],
+                            'start_date' => $scheduleData['start_date'],
+                            'start_time' => $scheduleData['start_time'],
+                        ]
+                    );
+                    $scheduleIds[] = $schedule->id;
+                }
+        $address->schedules()->whereNotIn('id', $scheduleIds)->delete();
+
+        Flux::toast(variant: 'success', text: __('Address saved successfully.'));
+        $this->resetForm();
+        $this->refreshAddresses();
+    }
+
+    public function deleteAddress(int $id): void
+    {
+        ServiceAddress::findOrFail($id)->delete();
+        Flux::toast(variant: 'success', text: __('Address deleted.'));
+        $this->refreshAddresses();
+    }
+
+    #[Computed]
+    public function serviceTypes()
+    {
+        return ServiceType::orderBy('name')->get();
+    }
+};
+
+?>
+
+<div class="mx-auto max-w-2xl space-y-6 pb-24">
+    <header class="flex items-center justify-between px-4 sm:px-0">
+        <div class="flex items-center gap-3">
+             <a href="{{ route('customers') }}" wire:navigate class="p-2 -ml-2 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 transition">
+                <flux:icon.chevron-left class="w-5 h-5" />
+            </a>
+            <div>
+                <h1 class="text-xl font-bold text-zinc-900 dark:text-white">{{ $customer->name }}</h1>
+                <p class="text-xs text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">{{ __('Service Locations') }}</p>
+            </div>
+        </div>
+        <flux:button wire:click="openCreateModal" variant="primary" icon="plus" size="sm" class="rounded-full">
+            {{ __('Add') }}
+        </flux:button>
+    </header>
+
+    <main class="space-y-4 px-4 sm:px-0">
+        @forelse($addresses as $addr)
+            <div class="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-2xl p-4 shadow-sm">
+                <div class="flex items-start justify-between mb-3">
+                    <div>
+                        <h3 class="font-bold text-zinc-900 dark:text-white">{{ $addr['label'] }}</h3>
+                        <p class="text-sm text-zinc-500 dark:text-zinc-400">{{ $addr['address'] }}</p>
+                        
+                        <div class="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-500">
+                            <div class="flex items-center gap-1">
+                                <flux:icon.clock class="w-3.5 h-3.5" />
+                                <span>{{ $addr['duration_hours'] }}h</span>
+                            </div>
+                            <div class="flex items-center gap-1">
+                                <flux:icon.banknotes class="w-3.5 h-3.5" />
+                                <span>{{ Number::currency($addr['hourly_rate'], 'GBP') }}/h ({{ Number::currency($addr['duration_hours'] * $addr['hourly_rate'], 'GBP') }})</span>
+                            </div>
+                            @if($addr['start_date'])
+                                <div class="flex items-center gap-1">
+                                    <flux:icon.calendar class="w-3.5 h-3.5" />
+                                    <span>{{ \Carbon\Carbon::parse($addr['start_date'])->format('d/m/y') }} @if($addr['end_date']) - {{ \Carbon\Carbon::parse($addr['end_date'])->format('d/m/y') }} @endif</span>
+                                </div>
+                            @endif
+                        </div>
+                    </div>
+                    <div class="flex gap-1">
+                        <flux:button wire:click="openEditModal({{ $addr['id'] }})" size="xs" variant="ghost" icon="pencil" />
+                        <flux:button wire:click="deleteAddress({{ $addr['id'] }})" size="xs" variant="ghost" icon="trash" class="text-red-500" />
+                    </div>
+                </div>
+
+                @if(!empty($addr['schedules']))
+                    <div class="space-y-2 pt-3 border-t border-zinc-100 dark:border-zinc-800">
+                        @foreach($addr['schedules'] as $sch)
+                            <div class="flex items-center justify-between text-xs">
+                                <div class="flex items-center gap-2">
+                                    <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                                    <span class="text-zinc-700 dark:text-zinc-300 font-medium">{{ __($sch['recurrence_type']) }}</span>
+                                    <span class="text-zinc-400">•</span>
+                                    <span class="text-zinc-500">{{ substr($sch['start_time'], 0, 5) }}</span>
+                                </div>
+                                <div class="text-zinc-400">
+                                    @if($sch['recurrence_type'] === 'weekly' || $sch['recurrence_type'] === 'fortnightly')
+                                        @foreach($sch['days_of_week'] as $day)
+                                            {{ substr(__(['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][$day]), 0, 1) }}
+                                        @endforeach
+                                    @endif
+                                </div>
+                            </div>
+                        @endforeach
+                    </div>
+                @endif
+            </div>
+        @empty
+            <div class="py-12 text-center text-zinc-400">
+                <flux:icon.map-pin class="w-12 h-12 mx-auto mb-3 opacity-20" />
+                <p>{{ __('No locations registered yet.') }}</p>
+            </div>
+        @endforelse
+    </main>
+
+    <!-- Modal para Cadastro/Edição -->
+    @if($showModal)
+        <div class="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-zinc-950/20 backdrop-blur-sm">
+            <div class="bg-white dark:bg-zinc-900 w-full max-w-lg rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden animate-in slide-in-from-bottom duration-300">
+                <div class="px-6 py-4 border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between">
+                    <h2 class="font-bold text-zinc-900 dark:text-white">{{ $addressId ? __('Edit Location') : __('New Location') }}</h2>
+                    <flux:button wire:click="resetForm" variant="ghost" icon="x-mark" size="sm" />
+                </div>
+                
+                <form wire:submit="save" class="p-6 space-y-6 max-h-[80vh] overflow-y-auto">
+                    <div class="space-y-4">
+                        <flux:field>
+                            <flux:label>{{ __('Label') }}</flux:label>
+                            <flux:input wire:model="label" placeholder="Ex: Casa, Trabalho..." required />
+                        </flux:field>
+
+                        <flux:field>
+                            <flux:label>{{ __('Address') }}</flux:label>
+                            <flux:input wire:model="address" required />
+                        </flux:field>
+
+                        <div class="grid grid-cols-2 gap-4">
+                            <flux:field>
+                                <flux:label>{{ __('City') }}</flux:label>
+                                <flux:input wire:model="city" />
+                            </flux:field>
+                            <flux:field>
+                                <flux:label>{{ __('Zip Code') }}</flux:label>
+                                <flux:input wire:model="zip_code" />
+                            </flux:field>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-4 pt-2">
+                            <flux:field>
+                                <flux:label>{{ __('Start Date') }}</flux:label>
+                                <flux:input type="date" wire:model="start_date" required />
+                            </flux:field>
+                            <flux:field>
+                                <flux:label>{{ __('End Date') }}</flux:label>
+                                <flux:input type="date" wire:model="end_date" />
+                            </flux:field>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-4">
+                            <flux:field>
+                                <flux:label>{{ __('Hours Duration') }}</flux:label>
+                                <flux:input type="number" step="0.5" wire:model="duration_hours" required />
+                            </flux:field>
+                            <flux:field>
+                                <flux:label>{{ __('Hourly Rate') }}</flux:label>
+                                <flux:input type="number" step="0.01" wire:model="hourly_rate" icon="banknotes" required />
+                            </flux:field>
+                        </div>
+                    </div>
+
+                    <div class="space-y-4 pt-4 border-t border-zinc-100 dark:border-zinc-800">
+                        <div class="flex items-center justify-between">
+                            <h3 class="text-sm font-bold text-zinc-900 dark:text-white uppercase tracking-widest">{{ __('Schedules') }}</h3>
+                            <flux:button wire:click="addSchedule" variant="ghost" size="xs" icon="plus">{{ __('Add') }}</flux:button>
+                        </div>
+
+                        @foreach($schedules as $idx => $sch)
+                            <div class="p-4 rounded-2xl bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-100 dark:border-zinc-700 space-y-4 relative">
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <flux:field>
+                                        <flux:label>{{ __('Service Type') }}</flux:label>
+                                        <flux:select wire:model="schedules.{{ $idx }}.service_type_id" placeholder="{{ __('Select a service...') }}">
+                                            @foreach($this->serviceTypes as $type)
+                                                <flux:select.option value="{{ $type->id }}">{{ $type->name }}</flux:select.option>
+                                            @endforeach
+                                        </flux:select>
+                                    </flux:field>
+
+                                    <flux:field>
+                                        <flux:label>{{ __('Custom Description (Optional)') }}</flux:label>
+                                        <flux:input wire:model="schedules.{{ $idx }}.description" />
+                                    </flux:field>
+                                </div>
+
+                                <div class="grid grid-cols-2 gap-4">
+                                    <flux:field>
+                                        <flux:label>{{ __('Recurrence') }}</flux:label>
+                                        <flux:select wire:model="schedules.{{ $idx }}.recurrence_type">
+                                            <flux:select.option value="once">{{ __('Once') }}</flux:select.option>
+                                            <flux:select.option value="weekly">{{ __('Weekly') }}</flux:select.option>
+                                            <flux:select.option value="fortnightly">{{ __('Fortnightly') }}</flux:select.option>
+                                            <flux:select.option value="monthly">{{ __('Monthly') }}</flux:select.option>
+                                        </flux:select>
+                                    </flux:field>
+
+                                    <flux:field>
+                                        <flux:label>{{ __('Start Time') }}</flux:label>
+                                        <flux:input type="time" wire:model="schedules.{{ $idx }}.start_time" />
+                                    </flux:field>
+                                </div>
+
+                                @if($schedules[$idx]['recurrence_type'] === 'weekly' || $schedules[$idx]['recurrence_type'] === 'fortnightly')
+                                    <flux:field>
+                                        <flux:label>{{ __('Days') }}</flux:label>
+                                        <div class="flex flex-wrap gap-2">
+                                            @foreach(['S', 'M', 'T', 'W', 'T', 'F', 'S'] as $dayIdx => $dayLabel)
+                                                <label class="cursor-pointer">
+                                                    <input type="checkbox" wire:model="schedules.{{ $idx }}.days_of_week" value="{{ $dayIdx }}" class="hidden peer">
+                                                    <div class="w-8 h-8 rounded-full border border-zinc-200 dark:border-zinc-700 flex items-center justify-center text-[10px] font-bold peer-checked:bg-zinc-900 peer-checked:text-white dark:peer-checked:bg-white dark:peer-checked:text-zinc-900 transition">
+                                                        {{ $dayLabel }}
+                                                    </div>
+                                                </label>
+                                            @endforeach
+                                        </div>
+                                    </flux:field>
+                                @endif
+
+                                @if($schedules[$idx]['recurrence_type'] === 'monthly')
+                                    <flux:field>
+                                        <flux:label>{{ __('Day of Month') }}</flux:label>
+                                        <flux:input type="number" min="1" max="31" wire:model="schedules.{{ $idx }}.day_of_month" />
+                                    </flux:field>
+                                @endif
+
+                                @if(count($schedules) > 1)
+                                    <button type="button" wire:click="removeSchedule({{ $idx }})" class="absolute top-2 right-2 text-zinc-400 hover:text-red-500">
+                                        <flux:icon.x-mark class="w-4 h-4" />
+                                    </button>
+                                @endif
+                            </div>
+                        @endforeach
+                    </div>
+
+                    <div class="pt-6">
+                        <flux:button type="submit" variant="primary" class="w-full rounded-2xl h-12 text-lg font-bold">
+                            {{ __('Save Location') }}
+                        </flux:button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    @endif
+</div>
