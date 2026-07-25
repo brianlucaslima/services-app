@@ -5,7 +5,7 @@ use Livewire\Attributes\Title;
 
 
 
-new #[Title('Customer')] class extends Component
+new #[Title('Customers')] class extends Component
 {
     //
 };
