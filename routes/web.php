@@ -9,6 +9,17 @@ use Illuminate\Support\Facades\Route;
 
 Route::view('/', 'welcome')->name('home');
 
+Route::get('lang/{locale}', function ($locale) {
+    if (in_array($locale, ['en_GB', 'pt_BR'])) {
+        session(['locale' => $locale]);
+        if (auth()->check()) {
+            auth()->user()->update(['locale' => $locale]);
+        }
+    }
+
+    return redirect()->back();
+})->name('lang.switch');
+
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::view('dashboard', 'dashboard')->name('dashboard');
     Route::livewire('customers', 'customer')->name('customers');
