@@ -1,9 +1,9 @@
 {
-    "name": "Laravel PWA",
-    "short_name": "LPT",
+    "name": "Easy Invoice",
+    "short_name": "Easy Invoice",
     "start_url": "/",
     "background_color": "#000000",
-    "description": "A Progressive Web Application setup for Laravel projects.",
+    "description": "Easy Invoice is a simple and easy to use invoice generator. It allows you to create invoices in seconds and send them to your clients.",
     "display": "fullscreen",
     "theme_color": "#000000",
     "icons": [
