@@ -14,8 +14,9 @@ new class extends Component
 {
     public $invoices = [];
 
-    // Screens: 'list', 'select_customer', 'select_services'
+    // Screens: 'list', 'select_customer', 'select_services', 'detail'
     public string $screen = 'list';
+    public ?int $selectedInvoiceId = null;
 
     // Create Invoice state
     public $selectedCustomerId = null;
@@ -25,6 +26,13 @@ new class extends Component
     public $dueDate;
     public $notes = '';
     public string $customerSearch = '';
+
+    // List Filters state
+    public string $filterCustomer = 'all';
+    public string $filterStartDate = '';
+    public string $filterEndDate = '';
+    public string $filterNumber = '';
+    public string $filterStatus = 'all';
 
     // Manual Service state
     public bool $showManualModal = false;
@@ -53,11 +61,45 @@ new class extends Component
 
     public function refreshInvoices(): void
     {
-        $this->invoices = auth()->user()->company->invoices()
-            ->with('customer')
-            ->latest()
-            ->get()
-            ->toArray();
+        $query = auth()->user()->company->invoices()->with('customer');
+
+        if ($this->filterCustomer !== 'all') {
+            $query->where('customer_id', $this->filterCustomer);
+        }
+
+        if ($this->filterStartDate) {
+            $query->where('date', '>=', $this->filterStartDate);
+        }
+
+        if ($this->filterEndDate) {
+            $query->where('date', '<=', $this->filterEndDate);
+        }
+
+        if ($this->filterNumber !== '') {
+            $query->where('number', 'like', "%{$this->filterNumber}%");
+        }
+
+        if ($this->filterStatus !== 'all') {
+            $query->where('status', $this->filterStatus);
+        }
+
+        $this->invoices = $query->latest()->get()->toArray();
+    }
+
+    public function updatedFilterCustomer(): void { $this->refreshInvoices(); }
+    public function updatedFilterStartDate(): void { $this->refreshInvoices(); }
+    public function updatedFilterEndDate(): void { $this->refreshInvoices(); }
+    public function updatedFilterNumber(): void { $this->refreshInvoices(); }
+    public function updatedFilterStatus(): void { $this->refreshInvoices(); }
+
+    public function clearFilters(): void
+    {
+        $this->filterCustomer = 'all';
+        $this->filterStartDate = '';
+        $this->filterEndDate = '';
+        $this->filterNumber = '';
+        $this->filterStatus = 'all';
+        $this->refreshInvoices();
     }
 
     public function goToSelectCustomer(): void
@@ -151,7 +193,7 @@ new class extends Component
             return;
         }
 
-        DB::transaction(function() {
+        $invoice = DB::transaction(function() {
             // Simple invoice number generation
             $count = Invoice::where('company_id', auth()->user()->company->id)->count() + 1;
             $number = 'INV-' . now()->format('Y') . '-' . str_pad($count, 4, '0', STR_PAD_LEFT);
@@ -168,16 +210,22 @@ new class extends Component
             ]);
 
             $total = 0;
-            $services = ServiceInstance::findMany($this->selectedServiceIds);
+            $services = ServiceInstance::with('address')->findMany($this->selectedServiceIds);
             
             foreach ($services as $service) {
                 $amount = $service->duration_hours * $service->hourly_rate;
                 $total += $amount;
 
+                $itemDescription = $service->description;
+                if ($service->address) {
+                    $itemDescription .= ' - ' . $service->address->label;
+                }
+                $itemDescription .= ' (' . $service->date->format('d/m/Y') . ')';
+
                 InvoiceItem::create([
                     'invoice_id' => $invoice->id,
                     'service_instance_id' => $service->id,
-                    'description' => $service->description . ' (' . $service->date->format('d/m/Y') . ')',
+                    'description' => $itemDescription,
                     'quantity' => $service->duration_hours,
                     'unit_price' => $service->hourly_rate,
                     'amount' => $amount,
@@ -185,11 +233,32 @@ new class extends Component
             }
 
             $invoice->update(['total_amount' => $total]);
+            return $invoice;
         });
 
-        $this->screen = 'list';
+        $this->selectedInvoiceId = $invoice->id;
+        $this->screen = 'detail';
         $this->refreshInvoices();
         Flux::toast(variant: 'success', text: __('Invoice created successfully.'));
+    }
+
+    public function showInvoice(int $id): void
+    {
+        $this->selectedInvoiceId = $id;
+        $this->screen = 'detail';
+    }
+
+    public function issueInvoice(): void
+    {
+        $invoice = auth()->user()->company->invoices()->findOrFail($this->selectedInvoiceId);
+        $invoice->update(['status' => 'sent']);
+        $this->refreshInvoices();
+        Flux::toast(variant: 'success', text: __('Invoice issued successfully.'));
+    }
+
+    public function sendEmail(): void
+    {
+        Flux::toast(variant: 'success', text: __('Invoice sent by email successfully.'));
     }
 
     public function deleteInvoice(int $id): void
@@ -199,15 +268,18 @@ new class extends Component
         Flux::toast(variant: 'success', text: __('Invoice deleted.'));
     }
 
-    public function cancelInvoice(int $id): void
+    public function cancelInvoice(?int $id = null): void
     {
+        $id = $id ?: $this->selectedInvoiceId;
         auth()->user()->company->invoices()->findOrFail($id)->delete();
         $this->refreshInvoices();
+        $this->screen = 'list';
         Flux::toast(variant: 'success', text: __('Invoice cancelled. Services are now pending again.'));
     }
 
-    public function markAsPaid(int $id): void
+    public function markAsPaid(?int $id = null): void
     {
+        $id = $id ?: $this->selectedInvoiceId;
         auth()->user()->company->invoices()->findOrFail($id)->update(['status' => 'paid']);
         $this->refreshInvoices();
         Flux::toast(variant: 'success', text: __('Invoice marked as paid.'));
@@ -248,6 +320,12 @@ new class extends Component
     {
         return auth()->user()->company->serviceTypes()->orderBy('name')->get();
     }
+
+    #[Computed]
+    public function selectedInvoice()
+    {
+        return $this->selectedInvoiceId ? auth()->user()->company->invoices()->with(['customer', 'items'])->find($this->selectedInvoiceId) : null;
+    }
 };
 
 ?>
@@ -261,6 +339,44 @@ new class extends Component
             </div>
             <flux:button wire:click="goToSelectCustomer" variant="primary" icon="plus">{{ __('New Invoice') }}</flux:button>
         </header>
+
+        <!-- Filters panel -->
+        <div class="grid grid-cols-1 sm:grid-cols-5 gap-4 p-4 bg-zinc-50 dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800">
+            <flux:field>
+                <flux:label>{{ __('Invoice Number') }}</flux:label>
+                <flux:input wire:model.live.debounce.300ms="filterNumber" placeholder="{{ __('INV-...') }}" />
+            </flux:field>
+
+            <flux:field>
+                <flux:label>{{ __('Customer') }}</flux:label>
+                <flux:select wire:model.live="filterCustomer" placeholder="{{ __('All Customers') }}">
+                    <flux:select.option value="all">{{ __('All Customers') }}</flux:select.option>
+                    @foreach($this->customers as $cust)
+                        <flux:select.option value="{{ $cust->id }}">{{ $cust->name }}</flux:select.option>
+                    @endforeach
+                </flux:select>
+            </flux:field>
+
+            <flux:field>
+                <flux:label>{{ __('Start Date') }}</flux:label>
+                <flux:input type="date" wire:model.live="filterStartDate" />
+            </flux:field>
+
+            <flux:field>
+                <flux:label>{{ __('End Date') }}</flux:label>
+                <flux:input type="date" wire:model.live="filterEndDate" />
+            </flux:field>
+
+            <flux:field>
+                <flux:label>{{ __('Status') }}</flux:label>
+                <flux:select wire:model.live="filterStatus" placeholder="{{ __('All Status') }}">
+                    <flux:select.option value="all">{{ __('All Status') }}</flux:select.option>
+                    <flux:select.option value="draft">{{ __('Draft') }}</flux:select.option>
+                    <flux:select.option value="sent">{{ __('Sent') }}</flux:select.option>
+                    <flux:select.option value="paid">{{ __('Paid') }}</flux:select.option>
+                </flux:select>
+            </flux:field>
+        </div>
 
         <div class="bg-white dark:bg-zinc-900 border-y sm:border border-zinc-200 dark:border-zinc-700 sm:rounded-xl overflow-hidden shadow-sm">
             <flux:table>
@@ -276,9 +392,13 @@ new class extends Component
                 <flux:table.rows>
                     @foreach($invoices as $invoice)
                         <flux:table.row :key="$invoice['id']">
-                            <flux:table.cell class="font-medium">{{ $invoice['number'] }}</flux:table.cell>
+                            <flux:table.cell class="font-semibold text-zinc-900 dark:text-white">
+                                <button type="button" wire:click="showInvoice({{ $invoice['id'] }})" class="hover:underline text-left">
+                                    {{ $invoice['number'] }}
+                                </button>
+                            </flux:table.cell>
                             <flux:table.cell>
-                                <span class="block">{{ $invoice['customer']['name'] }}</span>
+                                <span class="block font-medium">{{ $invoice['customer']['name'] }}</span>
                                 <span class="md:hidden text-xs text-zinc-500">{{ \Carbon\Carbon::parse($invoice['date'])->format('d/m/y') }}</span>
                             </flux:table.cell>
                             <flux:table.cell class="hidden md:table-cell">{{ \Carbon\Carbon::parse($invoice['date'])->format('d/m/Y') }}</flux:table.cell>
@@ -290,6 +410,7 @@ new class extends Component
                                 <flux:dropdown align="end">
                                     <flux:button variant="ghost" size="xs" icon="ellipsis-horizontal" />
                                     <flux:menu>
+                                        <flux:menu.item icon="eye" wire:click="showInvoice({{ $invoice['id'] }})">{{ __('View Details') }}</flux:menu.item>
                                         @if($invoice['status'] !== 'paid')
                                             <flux:menu.item icon="check" wire:click="markAsPaid({{ $invoice['id'] }})">{{ __('Mark as Paid') }}</flux:menu.item>
                                         @endif
@@ -443,6 +564,127 @@ new class extends Component
                     </div>
                 </div>
             @endif
+        </div>
+    @endif
+
+    @if($screen === 'detail' && $this->selectedInvoice)
+        @php $inv = $this->selectedInvoice; @endphp
+        <div class="space-y-6">
+            <header class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 px-4 sm:px-0">
+                <div class="flex items-center gap-3">
+                    <flux:button wire:click="$set('screen', 'list')" variant="ghost" icon="chevron-left" size="sm" class="rounded-full" />
+                    <div>
+                        <h1 class="text-xl font-bold text-zinc-900 dark:text-white">{{ $inv->number }}</h1>
+                        <p class="text-xs text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">{{ __('Invoice Details') }}</p>
+                    </div>
+                </div>
+
+                <div class="flex flex-wrap items-center gap-2">
+                    @if($inv->status === 'draft')
+                        <flux:button wire:click="issueInvoice" variant="primary" icon="check">{{ __('Issue Invoice') }}</flux:button>
+                    @else
+                        <flux:button wire:click="sendEmail" variant="outline" icon="paper-airplane">{{ __('Send by Email') }}</flux:button>
+                    @endif
+
+                    @if($inv->status === 'sent')
+                        <flux:button wire:click="markAsPaid" variant="filled" icon="check-circle" class="bg-emerald-600 hover:bg-emerald-700 text-white border-none">{{ __('Mark as Paid') }}</flux:button>
+                    @endif
+
+                    <a href="{{ route('invoices.pdf', ['id' => $inv->id]) }}" target="_blank" class="inline-flex items-center justify-center gap-2 rounded-lg bg-zinc-100 hover:bg-zinc-200 text-zinc-900 px-4 py-2 text-sm font-semibold shadow-sm transition dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700 border dark:border-zinc-700 h-[38px]">
+                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 015.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"/>
+                        </svg>
+                        <span>{{ $inv->status === 'draft' ? __('Download Draft PDF') : __('Download PDF') }}</span>
+                    </a>
+
+                    <flux:button wire:click="cancelInvoice" variant="danger" icon="x-mark">{{ __('Cancel Invoice') }}</flux:button>
+                </div>
+            </header>
+
+            <!-- Big watermark warning for Draft on list screen or detail -->
+            @if($inv->status === 'draft')
+                <div class="bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 p-4 rounded-2xl text-center">
+                    <span class="text-base font-bold text-red-600 dark:text-red-400 uppercase tracking-widest block">{{ __('DRAFT INVOICE') }}</span>
+                    <span class="text-xs text-zinc-500 dark:text-zinc-400 block mt-1">{{ __('This invoice has not been issued yet. The PDF download will contain a "DRAFT" watermark.') }}</span>
+                </div>
+            @endif
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <!-- Summary card -->
+                <div class="md:col-span-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-2xl p-6 shadow-sm space-y-6">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <span class="text-xs text-zinc-500 uppercase tracking-wider">{{ __('Customer') }}</span>
+                            <strong class="block text-lg text-zinc-900 dark:text-white mt-1">{{ $inv->customer->name }}</strong>
+                            <span class="text-sm text-zinc-500">{{ $inv->customer->email }}</span>
+                        </div>
+                        <div class="text-right">
+                            <span class="text-xs text-zinc-500 uppercase tracking-wider block">{{ __('Status') }}</span>
+                            <flux:badge :color="$this->getStatusColor($inv->status)" size="sm" class="mt-1">{{ __($inv->status) }}</flux:badge>
+                        </div>
+                    </div>
+
+                    <flux:separator />
+
+                    <!-- Details table -->
+                    <div class="space-y-4">
+                        <h3 class="text-sm font-bold text-zinc-900 dark:text-white uppercase tracking-wider">{{ __('Items') }}</h3>
+                        <div class="border border-zinc-100 dark:border-zinc-800 rounded-xl overflow-hidden">
+                            <table class="w-full text-xs text-left">
+                                <thead class="bg-zinc-50 dark:bg-zinc-800 text-zinc-500 uppercase">
+                                    <tr>
+                                        <th class="px-3 py-2">{{ __('Description') }}</th>
+                                        <th class="px-3 py-2 text-right">{{ __('Hours') }}</th>
+                                        <th class="px-3 py-2 text-right">{{ __('Price/Hour') }}</th>
+                                        <th class="px-3 py-2 text-right">{{ __('Amount') }}</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-zinc-100 dark:divide-zinc-800">
+                                    @foreach($inv->items as $item)
+                                        <tr>
+                                            <td class="px-3 py-3 font-semibold dark:text-zinc-200">{{ $item->description }}</td>
+                                            <td class="px-3 py-3 text-right text-zinc-600 dark:text-zinc-400">{{ number_format($item->quantity, 2) }}h</td>
+                                            <td class="px-3 py-3 text-right text-zinc-500">{{ Number::currency($item->unit_price, 'GBP') }}</td>
+                                            <td class="px-3 py-3 text-right font-bold text-zinc-950 dark:text-white">{{ Number::currency($item->amount, 'GBP') }}</td>
+                                        </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Meta details sidebar -->
+                <div class="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-2xl p-6 shadow-sm space-y-6 flex flex-col justify-between">
+                    <div class="space-y-6">
+                        <div>
+                            <span class="text-xs text-zinc-500 uppercase tracking-wider">{{ __('Total Invoice Amount') }}</span>
+                            <span class="block text-3xl font-extrabold text-zinc-900 dark:text-white mt-1">{{ Number::currency($inv->total_amount, 'GBP') }}</span>
+                        </div>
+
+                        <flux:separator />
+
+                        <div class="space-y-3 text-xs">
+                            <div>
+                                <strong class="text-zinc-500 block">{{ __('Invoice Date') }}:</strong>
+                                <span class="text-zinc-900 dark:text-white font-medium block mt-0.5">{{ $inv->date->format('d/m/Y') }}</span>
+                            </div>
+                            @if($inv->due_date)
+                                <div>
+                                    <strong class="text-zinc-500 block">{{ __('Due Date') }}:</strong>
+                                    <span class="text-zinc-900 dark:text-white font-medium block mt-0.5">{{ $inv->due_date->format('d/m/Y') }}</span>
+                                </div>
+                            @endif
+                            @if($inv->notes)
+                                <div>
+                                    <strong class="text-zinc-500 block">{{ __('Message / Notes') }}:</strong>
+                                    <p class="text-zinc-700 dark:text-zinc-300 mt-1 line-clamp-6">{!! nl2br(e($inv->notes)) !!}</p>
+                                </div>
+                            @endif
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     @endif
 

@@ -212,5 +212,19 @@
     "Your Payment Details": "Your Payment Details",
     "Payout Report generated on": "Payout Report generated on",
     "Search customers or locations...": "Search customers or locations...",
-    "Locations": "Locations"
+    "Locations": "Locations",
+    "Invoice Details": "Invoice Details",
+    "Issue Invoice": "Issue Invoice",
+    "Download Draft PDF": "Download Draft PDF",
+    "DRAFT INVOICE": "DRAFT INVOICE",
+    "This invoice has not been issued yet. The PDF download will contain a \"DRAFT\" watermark.": "This invoice has not been issued yet. The PDF download will contain a \"DRAFT\" watermark.",
+    "Total Invoice Amount": "Total Invoice Amount",
+    "DRAFT / RASCUNHO": "DRAFT / RASCUNHO",
+    "Invoice Number": "Invoice Number",
+    "Bill To": "Bill To",
+    "How To Pay": "How To Pay",
+    "Please make bank transfer to the following account": "Please make bank transfer to the following account",
+    "Invoice generated on": "Invoice generated on",
+    "INVOICE": "INVOICE",
+    "All Customers": "All Customers"
 }

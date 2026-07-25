@@ -212,5 +212,19 @@
     "Your Payment Details": "Seus Dados de Pagamento",
     "Payout Report generated on": "Relatório de Pagamento gerado em",
     "Search customers or locations...": "Buscar clientes ou locais...",
-    "Locations": "Locais"
+    "Locations": "Locais",
+    "Invoice Details": "Detalhes da Fatura",
+    "Issue Invoice": "Emitir Fatura",
+    "Download Draft PDF": "Baixar PDF Rascunho",
+    "DRAFT INVOICE": "FATURA EM RASCUNHO",
+    "This invoice has not been issued yet. The PDF download will contain a \"DRAFT\" watermark.": "Esta faturas ainda não foi emitida. O download em PDF conterá uma marca d'água \"RASCUNHO\".",
+    "Total Invoice Amount": "Valor Total da Fatura",
+    "DRAFT / RASCUNHO": "RASCUNHO",
+    "Invoice Number": "Número da Fatura",
+    "Bill To": "Faturar para",
+    "How To Pay": "Como Pagar",
+    "Please make bank transfer to the following account": "Por favor, faça uma transferência bancária para a seguinte conta",
+    "Invoice generated on": "Fatura gerada em",
+    "INVOICE": "FATURA",
+    "All Customers": "Todos os Clientes"
 }

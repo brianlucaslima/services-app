@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\Invoice;
 use App\Models\ServiceInstance;
 use App\Models\User;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -72,6 +73,23 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         return $pdf->download('payout-report-'.strtolower(str_replace(' ', '-', $user->name)).'-'.$start->format('d-m-Y').'.pdf');
     })->name('reports.pdf');
+
+    Route::get('invoices/{id}/pdf', function ($id) {
+        $invoice = Invoice::with(['customer', 'company', 'items'])->findOrFail($id);
+
+        // Secure access: must belong to the user's company
+        if ($invoice->company_id !== auth()->user()->company->id) {
+            abort(403);
+        }
+
+        $pdf = Pdf::loadView('pdf.invoice', [
+            'invoice' => $invoice,
+        ]);
+
+        $fileName = strtolower($invoice->number).($invoice->status === 'draft' ? '-draft' : '').'.pdf';
+
+        return $pdf->download($fileName);
+    })->name('invoices.pdf');
 });
 
 require __DIR__.'/settings.php';
