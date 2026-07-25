@@ -14,7 +14,7 @@
         }
         .header {
             margin-bottom: 30px;
-            border-bottom: 2px solid #f4f4f5;
+            border-bottom: 3px solid {{ $invoice->company->primary_color ?? '#18181b' }};
             padding-bottom: 20px;
         }
         .logo-placeholder {
@@ -58,6 +58,7 @@
             width: 100%;
             border-collapse: collapse;
             margin-bottom: 30px;
+            border-top: 3px solid {{ $invoice->company->primary_color ?? '#18181b' }};
         }
         th {
             background-color: #f4f4f5;
@@ -65,12 +66,12 @@
             font-weight: bold;
             text-transform: uppercase;
             font-size: 10px;
-            padding: 10px;
+            padding: 10px 15px;
             border-bottom: 1px solid #e4e4e7;
             text-align: left;
         }
         td {
-            padding: 12px 10px;
+            padding: 12px 15px;
             border-bottom: 1px solid #f4f4f5;
             vertical-align: top;
         }
@@ -91,12 +92,13 @@
             border-top: 2px solid #e4e4e7;
             font-size: 14px;
             font-weight: bold;
-            color: #111;
+            color: {{ $invoice->company->primary_color ?? '#18181b' }};
         }
         .payment-info {
             background-color: #fafafa;
-            border: 1px solid #f4f4f5;
-            border-radius: 12px;
+            border: 1px solid #e4e4e7;
+            border-left: 4px solid {{ $invoice->company->primary_color ?? '#18181b' }};
+            border-radius: 4px;
             padding: 15px;
             font-size: 11px;
         }

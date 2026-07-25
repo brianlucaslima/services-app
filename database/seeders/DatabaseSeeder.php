@@ -214,7 +214,7 @@ class DatabaseSeeder extends Seeder
         $invoice = Invoice::create([
             'company_id' => $company->id,
             'customer_id' => $robert->id,
-            'number' => 'INV-2026-0001',
+            'number' => '1',
             'date' => '2026-07-16',
             'due_date' => '2026-07-30',
             'status' => 'paid',

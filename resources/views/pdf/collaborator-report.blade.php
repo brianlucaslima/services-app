@@ -14,7 +14,7 @@
         }
         .header {
             margin-bottom: 30px;
-            border-bottom: 2px solid #eaeaea;
+            border-bottom: 3px solid {{ $company->primary_color ?? '#ef4444' }};
             padding-bottom: 20px;
         }
         .logo-placeholder {
@@ -44,7 +44,8 @@
         .summary-box {
             background-color: #f9f9f9;
             border: 1px solid #eaeaea;
-            border-radius: 8px;
+            border-left: 4px solid {{ $company->primary_color ?? '#ef4444' }};
+            border-radius: 4px;
             padding: 15px;
             margin-bottom: 30px;
         }
@@ -66,6 +67,7 @@
             width: 100%;
             border-collapse: collapse;
             margin-bottom: 30px;
+            border-top: 3px solid {{ $company->primary_color ?? '#ef4444' }};
         }
         th {
             background-color: #f4f4f5;
@@ -73,12 +75,12 @@
             font-weight: bold;
             text-transform: uppercase;
             font-size: 10px;
-            padding: 8px 10px;
+            padding: 8px 15px;
             border-bottom: 1px solid #e4e4e7;
             text-align: left;
         }
         td {
-            padding: 10px;
+            padding: 10px 15px;
             border-bottom: 1px solid #f4f4f5;
             vertical-align: top;
         }

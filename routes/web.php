@@ -32,6 +32,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::livewire('reports', 'collaborator-reports')->name('reports');
 
     Route::get('reports/{id}/pdf', function ($id) {
+        app()->setLocale('en');
+
         $user = User::findOrFail($id);
         $startDate = request('start_date');
         $endDate = request('end_date');
@@ -86,6 +88,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     })->name('reports.pdf');
 
     Route::get('invoices/{id}/pdf', function ($id) {
+        app()->setLocale('en');
+
         $invoice = Invoice::with(['customer', 'company', 'items'])->findOrFail($id);
 
         // Secure access: must belong to the user's company

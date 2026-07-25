@@ -198,7 +198,7 @@ new class extends Component
             $startNum = $company->invoice_start_number ?? 1;
             $count = Invoice::where('company_id', $company->id)->count();
             $nextNum = $startNum + $count;
-            $number = 'INV-' . str_pad($nextNum, 4, '0', STR_PAD_LEFT);
+            $number = str_pad($nextNum, 4, '0', STR_PAD_LEFT);
 
             $invoice = Invoice::create([
                 'company_id' => $company->id,
@@ -346,7 +346,7 @@ new class extends Component
         <div class="grid grid-cols-1 sm:grid-cols-5 gap-4 p-4 bg-zinc-50 dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800">
             <flux:field>
                 <flux:label>{{ __('Invoice Number') }}</flux:label>
-                <flux:input wire:model.live.debounce.300ms="filterNumber" placeholder="{{ __('INV-...') }}" />
+                <flux:input wire:model.live.debounce.300ms="filterNumber" placeholder="{{ __('0001...') }}" />
             </flux:field>
 
             <flux:field>
