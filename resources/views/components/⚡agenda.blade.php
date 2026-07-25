@@ -288,8 +288,10 @@ new class extends Component
             // 2. Services rescheduled TO this date (that weren't originally here)
             foreach ($instances as $instance) {
                 if ($instance->status !== 'skipped' && $instance->date->isSameDay($date)) {
-                    // Check if it was originally NOT on this date
-                    if (!$this->isScheduledForDate($instance->schedule, $date)) {
+                    // Check if it was originally NOT on this date (only for scheduled instances)
+                    $isOriginal = $instance->schedule ? $this->isScheduledForDate($instance->schedule, $date) : false;
+                    
+                    if (!$isOriginal) {
                         $assignedUsers = $instance->users;
                         $assignedCount = $assignedUsers->count() ?: 1;
                         $duration = $instance->duration_hours;
@@ -301,18 +303,18 @@ new class extends Component
                         }
 
                         $dayServices[] = [
-                            'id' => $instance->schedule->id,
-                            'customer_name' => $instance->schedule->address->customer->name,
-                            'address_label' => $instance->schedule->address->label,
+                            'id' => $instance->schedule?->id,
+                            'customer_name' => $instance->schedule?->address->customer->name ?? $instance->customer?->name ?? 'N/A',
+                            'address_label' => $instance->schedule?->address->label ?? $instance->address?->label ?? 'N/A',
                             'description' => $instance->description,
                             'duration' => $duration,
                             'total_value' => $totalValue,
                             'payout' => $assignedUsers->sum('hourly_rate') * ($duration / $assignedCount),
                             'time' => $instance->time,
-                            'recurrence' => $instance->schedule->recurrence_type,
-                            'original_date' => $instance->original_date->format('Y-m-d'),
-                            'is_override' => true,
-                            'rescheduled_from' => $instance->original_date->format('d/m'),
+                            'recurrence' => $instance->schedule?->recurrence_type ?? 'once',
+                            'original_date' => $instance->original_date ? $instance->original_date->format('Y-m-d') : $instance->date->format('Y-m-d'),
+                            'is_override' => (bool) $instance->service_schedule_id,
+                            'rescheduled_from' => $instance->original_date ? $instance->original_date->format('d/m') : null,
                             'status' => $instance->status,
                             'assigned_users' => $assignedUsers->map(fn($u) => [
                                 'name' => $u->name,

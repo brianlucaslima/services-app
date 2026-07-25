@@ -51,6 +51,9 @@ class Profile extends Component
 
         $user->save();
 
+        session(['locale' => $user->locale]);
+        app()->setLocale($user->locale);
+
         Flux::toast(variant: 'success', text: __('Profile updated.'));
 
         $this->redirect(route('profile.edit'), navigate: true);
