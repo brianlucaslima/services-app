@@ -21,9 +21,9 @@ Route::get('lang/{locale}', function ($locale) {
 })->name('lang.switch');
 
 Route::middleware(['auth', 'verified'])->group(function () {
-    Route::view('dashboard', 'dashboard')->name('dashboard');
+    Route::livewire('dashboard', 'dashboard')->name('dashboard');
     Route::livewire('customers', 'customer')->name('customers');
-    Route::livewire('customers/form', 'customer-form')->name('customers.form');
+    Route::livewire('customers/form/{id?}', 'customer-form')->name('customers.form');
     Route::livewire('customers/{id}/addresses', 'service-addresses')->name('customers.addresses');
     Route::livewire('agenda', 'agenda')->name('agenda');
     Route::livewire('invoices', 'invoices')->name('invoices');

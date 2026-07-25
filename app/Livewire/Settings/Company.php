@@ -63,11 +63,13 @@ class Company extends Component
             'default_invoice_message' => 'nullable|string',
             'logo' => 'nullable|image|max:1024',
             'primary_color' => 'required|string|max:10',
-            'invoice_start_number' => 'required|integer|min:1',
+            'invoice_start_number' => 'required|integer|min:0',
         ]);
 
         if ($this->logo) {
             $validated['logo'] = $this->logo->store('logos', 'public');
+        } else {
+            unset($validated['logo']);
         }
 
         $this->company->update($validated);

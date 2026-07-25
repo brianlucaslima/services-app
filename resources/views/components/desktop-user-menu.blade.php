@@ -22,11 +22,6 @@
             <flux:menu.item :href="route('profile.edit')" icon="cog" wire:navigate>
                 {{ __('Settings') }}
             </flux:menu.item>
-            @if(auth()->user()->role === 'management')
-                <flux:menu.item :href="route('company.edit')" icon="building-office" wire:navigate>
-                    {{ __('Company Settings') }}
-                </flux:menu.item>
-            @endif
             <form method="POST" action="{{ route('logout') }}" class="w-full">
                 @csrf
                 <flux:menu.item

@@ -377,11 +377,11 @@ new class extends Component
 
                                 <flux:field>
                                     <flux:label>{{ __('Assigned Team') }}</flux:label>
-                                    <flux:select wire:model="schedules.{{ $idx }}.user_ids" multiple placeholder="{{ __('Select team members...') }}">
+                                    <div class="mt-2 space-y-2 max-h-36 overflow-y-auto border border-zinc-200 dark:border-zinc-800 rounded-lg p-3 bg-zinc-50/50 dark:bg-zinc-950/20">
                                         @foreach($this->collaborators as $collab)
-                                            <flux:select.option value="{{ $collab->id }}">{{ $collab->name }}</flux:select.option>
+                                            <flux:checkbox wire:model="schedules.{{ $idx }}.user_ids" value="{{ $collab->id }}" label="{{ $collab->name }}" />
                                         @endforeach
-                                    </flux:select>
+                                    </div>
                                 </flux:field>
 
                                 <div class="grid grid-cols-2 gap-4">

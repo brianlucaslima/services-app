@@ -41,6 +41,7 @@ new class extends Component
     public $manualDate;
     public $manualHours = 1;
     public $manualRate = 0;
+    public array $manualUserIds = [];
 
     public function mount(): void
     {
@@ -146,6 +147,7 @@ new class extends Component
         $this->manualServiceTypeId = null;
         $this->manualDescription = '';
         $this->manualHours = 1;
+        $this->manualUserIds = [];
         // Try to get the rate from the customer's first address if possible
         $customer = auth()->user()->company->customers()->with('addresses')->find($this->selectedCustomerId);
         if ($customer && $customer->addresses->isNotEmpty()) {
@@ -169,7 +171,7 @@ new class extends Component
             $description = auth()->user()->company->serviceTypes()->findOrFail($this->manualServiceTypeId)->name;
         }
 
-        ServiceInstance::create([
+        $instance = ServiceInstance::create([
             'company_id' => auth()->user()->company->id,
             'customer_id' => $this->selectedCustomerId,
             'service_type_id' => $this->manualServiceTypeId,
@@ -180,6 +182,10 @@ new class extends Component
             'hourly_rate' => $this->manualRate,
             'status' => 'completed',
         ]);
+
+        if (!empty($this->manualUserIds)) {
+            $instance->users()->sync($this->manualUserIds);
+        }
 
         $this->showManualModal = false;
         $this->loadPendingServices();
@@ -195,10 +201,20 @@ new class extends Component
 
         $invoice = DB::transaction(function() {
             $company = auth()->user()->company;
-            $startNum = $company->invoice_start_number ?? 1;
-            $count = Invoice::where('company_id', $company->id)->count();
-            $nextNum = $startNum + $count;
-            $number = str_pad($nextNum, 4, '0', STR_PAD_LEFT);
+            $lastNum = $company->invoice_start_number ?? 0;
+            $nextNum = $lastNum + 1;
+
+            // Safety loop to prevent duplicate invoice numbers
+            do {
+                $number = str_pad($nextNum, 4, '0', STR_PAD_LEFT);
+                $exists = Invoice::where('company_id', $company->id)->where('number', $number)->exists();
+                if ($exists) {
+                    $nextNum++;
+                }
+            } while ($exists);
+
+            // Update the company's last invoice number
+            $company->update(['invoice_start_number' => $nextNum]);
 
             $invoice = Invoice::create([
                 'company_id' => $company->id,
@@ -315,6 +331,12 @@ new class extends Component
             })
             ->orderBy('name')
             ->get();
+    }
+
+    #[Computed]
+    public function collaborators()
+    {
+        return auth()->user()->company->users()->orderBy('name')->get();
     }
 
     #[Computed]
@@ -716,6 +738,15 @@ new class extends Component
                 <flux:field>
                     <flux:label>{{ __('Date') }}</flux:label>
                     <flux:input type="date" wire:model="manualDate" required />
+                </flux:field>
+
+                <flux:field>
+                    <flux:label>{{ __('Assigned Team') }}</flux:label>
+                    <div class="mt-2 space-y-2 max-h-36 overflow-y-auto border border-zinc-200 dark:border-zinc-800 rounded-lg p-3 bg-zinc-50/50 dark:bg-zinc-950/20">
+                        @foreach($this->collaborators as $collab)
+                            <flux:checkbox wire:model="manualUserIds" value="{{ $collab->id }}" label="{{ $collab->name }}" />
+                        @endforeach
+                    </div>
                 </flux:field>
 
                 <div class="grid grid-cols-2 gap-4">

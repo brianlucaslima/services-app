@@ -46,8 +46,8 @@
             </flux:field>
 
             <flux:field>
-                <flux:label>{{ __('Invoice Start Number') }}</flux:label>
-                <flux:input type="number" wire:model="invoice_start_number" min="1" />
+                <flux:label>{{ __('Last Invoice Number') }}</flux:label>
+                <flux:input type="number" wire:model="invoice_start_number" min="0" />
                 <flux:error name="invoice_start_number" />
             </flux:field>
         </div>
