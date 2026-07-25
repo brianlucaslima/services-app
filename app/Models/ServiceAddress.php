@@ -20,6 +20,7 @@ class ServiceAddress extends Model
         'end_date',
         'duration_hours',
         'hourly_rate',
+        'type',
     ];
 
     protected $casts = [

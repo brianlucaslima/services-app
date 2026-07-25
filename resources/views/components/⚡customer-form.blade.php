@@ -22,6 +22,10 @@ new class extends Component
 
     public function mount(?int $id = null): void
     {
+        if (auth()->user()->role !== 'management') {
+            abort(403);
+        }
+
         $this->customerId = $id;
 
         if ($id) {

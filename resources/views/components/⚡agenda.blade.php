@@ -14,6 +14,7 @@ new class extends Component
     public array $days = [];
     public float $weeklyHours = 0;
     public float $weeklyValue = 0;
+    public float $weeklyPayout = 0;
 
     // Reschedule modal state
     public bool $showRescheduleModal = false;
@@ -92,7 +93,7 @@ new class extends Component
     {
         $schedule = ServiceSchedule::with('address')->findOrFail($scheduleId);
         
-        ServiceInstance::updateOrCreate(
+        $inst = ServiceInstance::updateOrCreate(
             ['service_schedule_id' => $scheduleId, 'original_date' => $date],
             [
                 'company_id' => auth()->user()->company->id,
@@ -107,6 +108,7 @@ new class extends Component
                 'status' => 'skipped'
             ]
         );
+        $inst->users()->sync($schedule->users()->pluck('users.id')->toArray());
 
         $this->refreshAgenda();
         Flux::toast(variant: 'success', text: __('Service marked as skipped for this week.'));
@@ -114,7 +116,7 @@ new class extends Component
 
     public function saveCompletion(): void
     {
-        $schedule = ServiceSchedule::with(['address', 'type'])->findOrFail($this->selectedScheduleId);
+        $schedule = ServiceSchedule::with(['address', 'type', 'users'])->findOrFail($this->selectedScheduleId);
         
         // If it was already rescheduled, we should use its current date/time
         $instance = ServiceInstance::where('company_id', auth()->user()->company->id)
@@ -130,7 +132,7 @@ new class extends Component
             $description = __('Service at') . ' ' . $schedule->address->label;
         }
 
-        ServiceInstance::updateOrCreate(
+        $completedInstance = ServiceInstance::updateOrCreate(
             ['service_schedule_id' => $this->selectedScheduleId, 'original_date' => $this->selectedOriginalDate],
             [
                 'company_id' => auth()->user()->company->id,
@@ -146,6 +148,7 @@ new class extends Component
                 'notes' => $this->notes
             ]
         );
+        $completedInstance->users()->sync($schedule->users()->pluck('users.id')->toArray());
 
         $this->showCompletionModal = false;
         $this->refreshAgenda();
@@ -154,8 +157,8 @@ new class extends Component
 
     public function saveReschedule(): void
     {
-        $schedule = ServiceSchedule::with('address')->findOrFail($this->selectedScheduleId);
-        ServiceInstance::updateOrCreate(
+        $schedule = ServiceSchedule::with(['address', 'users'])->findOrFail($this->selectedScheduleId);
+        $rescheduledInstance = ServiceInstance::updateOrCreate(
             ['service_schedule_id' => $this->selectedScheduleId, 'original_date' => $this->selectedOriginalDate],
             [
                 'company_id' => auth()->user()->company->id,
@@ -170,6 +173,7 @@ new class extends Component
                 'status' => $this->rescheduleMode === 'skip' ? 'skipped' : 'scheduled'
             ]
         );
+        $rescheduledInstance->users()->sync($schedule->users()->pluck('users.id')->toArray());
 
         $this->showRescheduleModal = false;
         $this->refreshAgenda();
@@ -184,18 +188,24 @@ new class extends Component
         
         $companyId = auth()->user()->company->id;
         $schedules = ServiceSchedule::whereHas('address.customer', fn($q) => $q->where('company_id', $companyId))
-            ->with(['address.customer'])
+            ->with(['address.customer', 'users'])
             ->where('is_active', true)
             ->get();
 
         // Get all instances in or affecting this week
         $instances = ServiceInstance::where('company_id', $companyId)
-            ->with(['schedule.address.customer'])
+            ->with(['schedule.address.customer', 'users'])
             ->where(function($query) use ($start, $end) {
                 $query->whereBetween('date', [$start->format('Y-m-d'), $end->format('Y-m-d')])
                       ->orWhereBetween('original_date', [$start->format('Y-m-d'), $end->format('Y-m-d')]);
             })
             ->get();
+
+        // If basic access (collaborator), filter to only see what they are part of
+        if (auth()->user()->role !== 'management') {
+            $schedules = $schedules->filter(fn($s) => $s->users->contains(auth()->id()));
+            $instances = $instances->filter(fn($i) => $i->users->contains(auth()->id()) || ($i->schedule && $i->schedule->users->contains(auth()->id())));
+        }
 
         $days = [];
         foreach ($period as $date) {
@@ -211,34 +221,64 @@ new class extends Component
                                          ->first();
                     
                     if (!$override) {
+                        $assignedUsers = $schedule->users;
+                        $assignedCount = $assignedUsers->count() ?: 1;
+                        $duration = $schedule->address->duration_hours;
+                        
+                        if (auth()->user()->role !== 'management') {
+                            $totalValue = auth()->user()->hourly_rate * ($duration / $assignedCount);
+                        } else {
+                            $totalValue = $duration * $schedule->address->hourly_rate;
+                        }
+
                         // Regular occurrence
                         $dayServices[] = [
                             'id' => $schedule->id,
                             'customer_name' => $schedule->address->customer->name,
                             'address_label' => $schedule->address->label,
                             'description' => $schedule->description ?: ($schedule->type ? $schedule->type->name : null),
-                            'duration' => $schedule->address->duration_hours,
-                            'total_value' => $schedule->address->duration_hours * $schedule->address->hourly_rate,
+                            'duration' => $duration,
+                            'total_value' => $totalValue,
+                            'payout' => $assignedUsers->sum('hourly_rate') * ($duration / $assignedCount),
                             'time' => $schedule->start_time,
                             'recurrence' => $schedule->recurrence_type,
                             'original_date' => $dateStr,
                             'is_override' => false,
                             'status' => 'scheduled',
+                            'assigned_users' => $assignedUsers->map(fn($u) => [
+                                'name' => $u->name,
+                                'initials' => $u->initials(),
+                            ])->toArray(),
                         ];
                     } elseif ($override->status !== 'skipped' && $override->date->isSameDay($date)) {
+                        $assignedUsers = $override->users;
+                        $assignedCount = $assignedUsers->count() ?: 1;
+                        $duration = $schedule->address->duration_hours;
+                        
+                        if (auth()->user()->role !== 'management') {
+                            $totalValue = auth()->user()->hourly_rate * ($duration / $assignedCount);
+                        } else {
+                            $totalValue = $duration * $schedule->address->hourly_rate;
+                        }
+
                         // It was overridden but remains on the same day (maybe time change)
                         $dayServices[] = [
                             'id' => $schedule->id,
                             'customer_name' => $schedule->address->customer->name,
                             'address_label' => $schedule->address->label,
                             'description' => $override->description,
-                            'duration' => $schedule->address->duration_hours,
-                            'total_value' => $schedule->address->duration_hours * $schedule->address->hourly_rate,
+                            'duration' => $duration,
+                            'total_value' => $totalValue,
+                            'payout' => $assignedUsers->sum('hourly_rate') * ($duration / $assignedCount),
                             'time' => $override->time,
                             'recurrence' => $schedule->recurrence_type,
                             'original_date' => $dateStr,
                             'is_override' => true,
                             'status' => $override->status,
+                            'assigned_users' => $assignedUsers->map(fn($u) => [
+                                'name' => $u->name,
+                                'initials' => $u->initials(),
+                            ])->toArray(),
                         ];
                     }
                     // If status is skipped or date != original_date, it's not shown here
@@ -250,19 +290,34 @@ new class extends Component
                 if ($instance->status !== 'skipped' && $instance->date->isSameDay($date)) {
                     // Check if it was originally NOT on this date
                     if (!$this->isScheduledForDate($instance->schedule, $date)) {
+                        $assignedUsers = $instance->users;
+                        $assignedCount = $assignedUsers->count() ?: 1;
+                        $duration = $instance->duration_hours;
+                        
+                        if (auth()->user()->role !== 'management') {
+                            $totalValue = auth()->user()->hourly_rate * ($duration / $assignedCount);
+                        } else {
+                            $totalValue = $duration * $instance->hourly_rate;
+                        }
+
                         $dayServices[] = [
                             'id' => $instance->schedule->id,
                             'customer_name' => $instance->schedule->address->customer->name,
                             'address_label' => $instance->schedule->address->label,
                             'description' => $instance->description,
-                            'duration' => $instance->duration_hours,
-                            'total_value' => $instance->duration_hours * $instance->hourly_rate,
+                            'duration' => $duration,
+                            'total_value' => $totalValue,
+                            'payout' => $assignedUsers->sum('hourly_rate') * ($duration / $assignedCount),
                             'time' => $instance->time,
                             'recurrence' => $instance->schedule->recurrence_type,
                             'original_date' => $instance->original_date->format('Y-m-d'),
                             'is_override' => true,
                             'rescheduled_from' => $instance->original_date->format('d/m'),
                             'status' => $instance->status,
+                            'assigned_users' => $assignedUsers->map(fn($u) => [
+                                'name' => $u->name,
+                                'initials' => $u->initials(),
+                            ])->toArray(),
                         ];
                     }
                 }
@@ -282,10 +337,24 @@ new class extends Component
         // Calculate weekly totals
         $this->weeklyHours = 0;
         $this->weeklyValue = 0;
+        $this->weeklyPayout = 0;
         foreach ($this->days as $day) {
             foreach ($day['services'] as $service) {
-                $this->weeklyHours += $service['duration'];
-                $this->weeklyValue += $service['total_value'];
+                if (auth()->user()->role !== 'management') {
+                    // Collaborator only gets paid for completed services
+                    if ($service['status'] === 'completed') {
+                        $this->weeklyHours += $service['duration'] / (count($service['assigned_users']) ?: 1);
+                        $this->weeklyValue += $service['total_value'];
+                    }
+                } else {
+                    // Management sees totals for all active services in view
+                    $this->weeklyHours += $service['duration'];
+                    $this->weeklyValue += $service['total_value'];
+                    // Sum payout for completed services (or all services, but "confirmado e executado" usually means we calculate payout for completed, or we can count expected payout too. Let's count payout for completed services only, which perfectly matches "confirmado e executado", or let's sum payouts for completed services).
+                    if ($service['status'] === 'completed') {
+                        $this->weeklyPayout += $service['payout'] ?? 0;
+                    }
+                }
             }
         }
     }
@@ -342,9 +411,15 @@ new class extends Component
                         <span class="font-medium text-zinc-900 dark:text-white">{{ $weeklyHours }}h</span>
                     </div>
                     <div class="flex items-center gap-1.5">
-                        <flux:icon.banknotes class="w-4 h-4" />
-                        <span class="font-medium text-emerald-600 dark:text-emerald-400">{{ Number::currency($weeklyValue, 'GBP') }}</span>
+                        <flux:icon.banknotes class="w-4 h-4 text-emerald-500" />
+                        <span class="font-medium text-emerald-600 dark:text-emerald-400" title="{{ __('Weekly Gross Billing') }}">{{ Number::currency($weeklyValue, 'GBP') }}</span>
                     </div>
+                    @if(auth()->user()->role === 'management')
+                        <div class="flex items-center gap-1.5 border-l border-zinc-200 dark:border-zinc-700 pl-3">
+                            <flux:icon.banknotes class="w-4 h-4 text-red-500" />
+                            <span class="font-medium text-red-600 dark:text-red-400" title="{{ __('Weekly Team Payout') }}">{{ Number::currency($weeklyPayout, 'GBP') }}</span>
+                        </div>
+                    @endif
                 </div>
             </div>
         </div>
@@ -380,18 +455,20 @@ new class extends Component
                                         <flux:icon.check-circle class="w-4 h-4 text-emerald-500" variant="solid" />
                                     @endif
 
-                                    <flux:dropdown align="end">
-                                        <flux:button variant="ghost" size="xs" icon="ellipsis-vertical" class="h-4 w-4" />
-                                        <flux:menu>
-                                            @if($service['status'] !== 'completed')
-                                                <flux:menu.item icon="check" wire:click="openCompletion({{ $service['id'] }}, '{{ $service['original_date'] }}')">{{ __('Mark as Completed') }}</flux:menu.item>
-                                            @else
-                                                <flux:menu.item icon="pencil" wire:click="openCompletion({{ $service['id'] }}, '{{ $service['original_date'] }}')">{{ __('Edit Notes') }}</flux:menu.item>
-                                            @endif
-                                            <flux:menu.item icon="calendar" wire:click="openReschedule({{ $service['id'] }}, '{{ $service['original_date'] }}', '{{ $service['time'] }}')">{{ __('Reschedule') }}</flux:menu.item>
-                                            <flux:menu.item icon="x-mark" variant="danger" wire:click="skipOccurrence({{ $service['id'] }}, '{{ $service['original_date'] }}')">{{ __('Skip this week') }}</flux:menu.item>
-                                        </flux:menu>
-                                    </flux:dropdown>
+                                    @if(auth()->user()->role === 'management')
+                                        <flux:dropdown align="end">
+                                            <flux:button variant="ghost" size="xs" icon="ellipsis-vertical" class="h-4 w-4" />
+                                            <flux:menu>
+                                                @if($service['status'] !== 'completed')
+                                                    <flux:menu.item icon="check" wire:click="openCompletion({{ $service['id'] }}, '{{ $service['original_date'] }}')">{{ __('Mark as Completed') }}</flux:menu.item>
+                                                @else
+                                                    <flux:menu.item icon="pencil" wire:click="openCompletion({{ $service['id'] }}, '{{ $service['original_date'] }}')">{{ __('Edit Notes') }}</flux:menu.item>
+                                                @endif
+                                                <flux:menu.item icon="calendar" wire:click="openReschedule({{ $service['id'] }}, '{{ $service['original_date'] }}', '{{ $service['time'] }}')">{{ __('Reschedule') }}</flux:menu.item>
+                                                <flux:menu.item icon="x-mark" variant="danger" wire:click="skipOccurrence({{ $service['id'] }}, '{{ $service['original_date'] }}')">{{ __('Skip this week') }}</flux:menu.item>
+                                            </flux:menu>
+                                        </flux:dropdown>
+                                    @endif
                                 </div>
                             </div>
                             
@@ -422,12 +499,22 @@ new class extends Component
                                 </p>
                             @endif
 
-                            <div class="mt-1 flex items-center justify-between">
+                             <div class="mt-1 flex items-center justify-between">
                                 <span class="font-medium text-zinc-700 dark:text-zinc-200">{{ substr($service['time'], 0, 5) }}</span>
                                 <span class="px-1.5 py-0.5 rounded-md bg-zinc-200 dark:bg-zinc-700 text-[10px] text-zinc-600 dark:text-zinc-400 uppercase">
                                     {{ substr(__($service['recurrence']), 0, 1) }}
                                 </span>
                             </div>
+
+                            @if(!empty($service['assigned_users']))
+                                <div class="mt-2 flex -space-x-1 overflow-hidden">
+                                    @foreach($service['assigned_users'] as $u)
+                                        <div class="inline-block h-5 w-5 rounded-full ring-2 ring-white dark:ring-zinc-900 bg-zinc-100 dark:bg-zinc-700 text-[8px] font-bold flex items-center justify-center text-zinc-600 dark:text-zinc-300" title="{{ $u['name'] }}">
+                                            {{ $u['initials'] }}
+                                        </div>
+                                    @endforeach
+                                </div>
+                            @endif
                         </div>
                     @empty
                         <div class="h-full flex items-center justify-center">

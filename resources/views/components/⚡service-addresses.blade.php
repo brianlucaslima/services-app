@@ -23,6 +23,7 @@ new class extends Component
     public $end_date = '';
     public $duration_hours = 0;
     public $hourly_rate = 0;
+    public string $type = 'house';
     
     // Schedules for the current address being edited
     public $schedules = [];
@@ -31,6 +32,10 @@ new class extends Component
 
     public function mount(int $id): void
     {
+        if (auth()->user()->role !== 'management') {
+            abort(403);
+        }
+
         $this->customer = auth()->user()->company->customers()->findOrFail($id);
         $this->refreshAddresses();
     }
@@ -55,7 +60,7 @@ new class extends Component
     public function openEditModal(int $id): void
     {
         $this->resetForm();
-        $address = $this->customer->addresses()->with('schedules')->findOrFail($id);
+        $address = $this->customer->addresses()->with('schedules.users')->findOrFail($id);
         $this->addressId = $address->id;
         $this->label = $address->label;
         $this->address = $address->address;
@@ -65,6 +70,7 @@ new class extends Component
         $this->end_date = $address->end_date ? $address->end_date->format('Y-m-d') : '';
         $this->duration_hours = $address->duration_hours;
         $this->hourly_rate = $address->hourly_rate;
+        $this->type = $address->type ?? 'house';
         
         foreach ($address->schedules as $schedule) {
             $this->schedules[] = [
@@ -76,6 +82,7 @@ new class extends Component
                 'day_of_month' => $schedule->day_of_month,
                 'start_date' => $schedule->start_date->format('Y-m-d'),
                 'start_time' => $schedule->start_time,
+                'user_ids' => $schedule->users->pluck('id')->toArray(),
             ];
         }
         
@@ -97,6 +104,7 @@ new class extends Component
         $this->end_date = '';
         $this->duration_hours = 0;
         $this->hourly_rate = 0;
+        $this->type = 'house';
         $this->schedules = [];
         $this->showModal = false;
     }
@@ -112,6 +120,7 @@ new class extends Component
             'day_of_month' => null,
             'start_date' => now()->format('Y-m-d'),
             'start_time' => '08:00',
+            'user_ids' => [],
         ];
     }
 
@@ -130,6 +139,7 @@ new class extends Component
             'end_date' => 'nullable|date|after_or_equal:start_date',
             'duration_hours' => 'required|numeric|min:0',
             'hourly_rate' => 'required|numeric|min:0',
+            'type' => 'required|in:house,office',
             'schedules.*.recurrence_type' => 'required|in:once,weekly,fortnightly,monthly',
             'schedules.*.start_date' => 'required|date',
             'schedules.*.start_time' => 'required',
@@ -146,25 +156,27 @@ new class extends Component
                 'end_date' => $this->end_date ?: null,
                 'duration_hours' => $this->duration_hours,
                 'hourly_rate' => $this->hourly_rate,
+                'type' => $this->type,
             ]
         );
 
         $scheduleIds = [];
-                foreach ($this->schedules as $scheduleData) {
-                    $schedule = $address->schedules()->updateOrCreate(
-                        ['id' => $scheduleData['id']],
-                        [
-                            'service_type_id' => $scheduleData['service_type_id'],
-                            'description' => $scheduleData['description'],
-                            'recurrence_type' => $scheduleData['recurrence_type'],
-                            'days_of_week' => $scheduleData['days_of_week'],
-                            'day_of_month' => $scheduleData['day_of_month'],
-                            'start_date' => $scheduleData['start_date'],
-                            'start_time' => $scheduleData['start_time'],
-                        ]
-                    );
-                    $scheduleIds[] = $schedule->id;
-                }
+        foreach ($this->schedules as $scheduleData) {
+            $schedule = $address->schedules()->updateOrCreate(
+                ['id' => $scheduleData['id']],
+                [
+                    'service_type_id' => $scheduleData['service_type_id'],
+                    'description' => $scheduleData['description'],
+                    'recurrence_type' => $scheduleData['recurrence_type'],
+                    'days_of_week' => $scheduleData['days_of_week'],
+                    'day_of_month' => $scheduleData['day_of_month'],
+                    'start_date' => $scheduleData['start_date'],
+                    'start_time' => $scheduleData['start_time'],
+                ]
+            );
+            $schedule->users()->sync($scheduleData['user_ids'] ?? []);
+            $scheduleIds[] = $schedule->id;
+        }
         $address->schedules()->whereNotIn('id', $scheduleIds)->delete();
 
         Flux::toast(variant: 'success', text: __('Address saved successfully.'));
@@ -183,6 +195,12 @@ new class extends Component
     public function serviceTypes()
     {
         return auth()->user()->company->serviceTypes()->orderBy('name')->get();
+    }
+
+    #[Computed]
+    public function collaborators()
+    {
+        return auth()->user()->company->users()->orderBy('name')->get();
     }
 };
 
@@ -209,7 +227,10 @@ new class extends Component
             <div class="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-2xl p-4 shadow-sm">
                 <div class="flex items-start justify-between mb-3">
                     <div>
-                        <h3 class="font-bold text-zinc-900 dark:text-white">{{ $addr['label'] }}</h3>
+                        <h3 class="font-bold text-zinc-900 dark:text-white flex items-center gap-2">
+                            {{ $addr['label'] }}
+                            <flux:badge size="sm" :color="$addr['type'] === 'house' ? 'zinc' : 'blue'">{{ __($addr['type']) }}</flux:badge>
+                        </h3>
                         <p class="text-sm text-zinc-500 dark:text-zinc-400">{{ $addr['address'] }}</p>
                         
                         <div class="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-500">
@@ -276,10 +297,20 @@ new class extends Component
                 
                 <form wire:submit="save" class="p-6 space-y-6 max-h-[80vh] overflow-y-auto">
                     <div class="space-y-4">
-                        <flux:field>
-                            <flux:label>{{ __('Label') }}</flux:label>
-                            <flux:input wire:model="label" placeholder="Ex: Casa, Trabalho..." required />
-                        </flux:field>
+                        <div class="grid grid-cols-2 gap-4">
+                            <flux:field>
+                                <flux:label>{{ __('Label') }}</flux:label>
+                                <flux:input wire:model="label" placeholder="Ex: Casa, Trabalho..." required />
+                            </flux:field>
+
+                            <flux:field>
+                                <flux:label>{{ __('Location Type') }}</flux:label>
+                                <flux:select wire:model="type">
+                                    <flux:select.option value="house">{{ __('House') }}</flux:select.option>
+                                    <flux:select.option value="office">{{ __('Office') }}</flux:select.option>
+                                </flux:select>
+                            </flux:field>
+                        </div>
 
                         <flux:field>
                             <flux:label>{{ __('Address') }}</flux:label>
@@ -343,6 +374,15 @@ new class extends Component
                                         <flux:input wire:model="schedules.{{ $idx }}.description" />
                                     </flux:field>
                                 </div>
+
+                                <flux:field>
+                                    <flux:label>{{ __('Assigned Team') }}</flux:label>
+                                    <flux:select wire:model="schedules.{{ $idx }}.user_ids" multiple placeholder="{{ __('Select team members...') }}">
+                                        @foreach($this->collaborators as $collab)
+                                            <flux:select.option value="{{ $collab->id }}">{{ $collab->name }}</flux:select.option>
+                                        @endforeach
+                                    </flux:select>
+                                </flux:field>
 
                                 <div class="grid grid-cols-2 gap-4">
                                     <flux:field>

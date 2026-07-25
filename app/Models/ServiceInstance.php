@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class ServiceInstance extends Model
@@ -22,11 +23,14 @@ class ServiceInstance extends Model
         'notes',
         'duration_hours',
         'hourly_rate',
+        'payout_status',
+        'payout_date',
     ];
 
     protected $casts = [
         'original_date' => 'date',
         'date' => 'date',
+        'payout_date' => 'date',
         'duration_hours' => 'decimal:2',
         'hourly_rate' => 'decimal:2',
     ];
@@ -54,6 +58,11 @@ class ServiceInstance extends Model
     public function schedule(): BelongsTo
     {
         return $this->belongsTo(ServiceSchedule::class, 'service_schedule_id');
+    }
+
+    public function users(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'service_instance_user');
     }
 
     public function invoiceItem(): HasOne

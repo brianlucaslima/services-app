@@ -24,6 +24,7 @@ new class extends Component
     public $invoiceDate;
     public $dueDate;
     public $notes = '';
+    public string $customerSearch = '';
 
     // Manual Service state
     public bool $showManualModal = false;
@@ -35,6 +36,10 @@ new class extends Component
 
     public function mount(): void
     {
+        if (auth()->user()->role !== 'management') {
+            abort(403);
+        }
+
         $this->invoiceDate = now()->format('Y-m-d');
         $this->dueDate = now()->addDays(14)->format('Y-m-d');
         $this->manualDate = now()->format('Y-m-d');
@@ -59,6 +64,7 @@ new class extends Component
     {
         $this->selectedCustomerId = null;
         $this->notes = '';
+        $this->customerSearch = '';
         $this->screen = 'list'; // To trigger state cleanup
         $this->screen = 'select_customer';
     }
@@ -220,7 +226,21 @@ new class extends Component
     #[Computed]
     public function customers()
     {
-        return auth()->user()->company->customers()->where('is_active', true)->orderBy('name')->get();
+        return auth()->user()->company->customers()
+            ->with('addresses')
+            ->where('is_active', true)
+            ->when($this->customerSearch !== '', function($query) {
+                $query->where(function($query) {
+                    $query->where('name', 'like', "%{$this->customerSearch}%")
+                        ->orWhere('email', 'like', "%{$this->customerSearch}%")
+                        ->orWhereHas('addresses', function($query) {
+                            $query->where('label', 'like', "%{$this->customerSearch}%")
+                                ->orWhere('address', 'like', "%{$this->customerSearch}%");
+                        });
+                });
+            })
+            ->orderBy('name')
+            ->get();
     }
 
     #[Computed]
@@ -302,12 +322,27 @@ new class extends Component
             </div>
         </header>
 
+        <!-- Search field -->
+        <div class="relative w-full sm:w-72 px-4 sm:px-0">
+            <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                <svg class="h-5 w-5 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/>
+                </svg>
+            </div>
+            <input wire:model.live.debounce.300ms="customerSearch" type="search" placeholder="{{ __('Search customers or locations...') }}" class="block w-full rounded-lg border-0 py-2 pl-10 pr-3 text-zinc-900 shadow-sm ring-1 ring-inset ring-zinc-300 placeholder:text-zinc-400 focus:ring-2 focus:ring-inset focus:ring-zinc-900 dark:bg-zinc-900 dark:text-white dark:ring-zinc-700 dark:placeholder:text-zinc-500 dark:focus:ring-white sm:text-sm sm:leading-6" />
+        </div>
+
         <div class="grid gap-3 px-4 sm:px-0">
             @foreach($this->customers as $customer)
                 <button wire:click="selectCustomer({{ $customer->id }})" class="flex items-center justify-between p-4 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-2xl hover:border-zinc-900 dark:hover:border-white transition text-left group">
                     <div>
                         <p class="font-bold text-zinc-900 dark:text-white group-hover:text-zinc-900 dark:group-hover:text-white">{{ $customer->name }}</p>
-                        <p class="text-sm text-zinc-500">{{ $customer->email }}</p>
+                        @if($customer->addresses->isNotEmpty())
+                            <p class="text-[10px] text-zinc-400 dark:text-zinc-550 mt-0.5">
+                                {{ __('Locations') }}: {{ implode(', ', $customer->addresses->pluck('label')->toArray()) }}
+                            </p>
+                        @endif
+                        <p class="text-sm text-zinc-500 mt-1">{{ $customer->email }}</p>
                     </div>
                     <flux:icon.chevron-right class="w-5 h-5 text-zinc-300" />
                 </button>

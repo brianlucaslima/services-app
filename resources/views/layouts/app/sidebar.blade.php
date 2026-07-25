@@ -21,26 +21,36 @@
                         {{ __('Agenda') }}
                     </flux:sidebar.item>
 
-                    <flux:sidebar.item icon="banknotes" :href="route('invoices')" :current="request()->routeIs('invoices')" wire:navigate>
-                        {{ __('Invoices') }}
-                    </flux:sidebar.item>
+                    @if(auth()->user()->role === 'management')
+                        <flux:sidebar.item icon="banknotes" :href="route('invoices')" :current="request()->routeIs('invoices')" wire:navigate>
+                            {{ __('Invoices') }}
+                        </flux:sidebar.item>
 
-                    <flux:sidebar.item icon="briefcase" :href="route('service-types')" :current="request()->routeIs('service-types')" wire:navigate>
-                        {{ __('Services') }}
-                    </flux:sidebar.item>
+                        <flux:sidebar.item icon="briefcase" :href="route('service-types')" :current="request()->routeIs('service-types')" wire:navigate>
+                            {{ __('Services') }}
+                        </flux:sidebar.item>
 
-                    <flux:sidebar.item icon="building-office" :href="route('company.edit')" :current="request()->routeIs('company.edit')" wire:navigate>
-                        {{ __('Company Settings') }}
-                    </flux:sidebar.item>
+                        <flux:sidebar.item icon="users" :href="route('collaborators')" :current="request()->routeIs('collaborators')" wire:navigate>
+                            {{ __('Collaborators') }}
+                        </flux:sidebar.item>
 
-                    <flux:sidebar.item
-                        :href="route('customers')"
-                        :current="request()->routeIs('customers')"
-                        wire:navigate
-                        icon="users"
-                    >
-                        {{ __('Customers') }}
-                    </flux:sidebar.item>
+                        <flux:sidebar.item icon="document-chart-bar" :href="route('reports')" :current="request()->routeIs('reports')" wire:navigate>
+                            {{ __('Payout Reports') }}
+                        </flux:sidebar.item>
+
+                        <flux:sidebar.item icon="building-office" :href="route('company.edit')" :current="request()->routeIs('company.edit')" wire:navigate>
+                            {{ __('Company Settings') }}
+                        </flux:sidebar.item>
+
+                        <flux:sidebar.item
+                            :href="route('customers')"
+                            :current="request()->routeIs('customers')"
+                            wire:navigate
+                            icon="users"
+                        >
+                            {{ __('Customers') }}
+                        </flux:sidebar.item>
+                    @endif
                 </flux:sidebar.group>
             </flux:sidebar.nav>
 
@@ -94,9 +104,11 @@
                         <flux:menu.item :href="route('profile.edit')" icon="cog" wire:navigate>
                             {{ __('Settings') }}
                         </flux:menu.item>
-                        <flux:menu.item :href="route('company.edit')" icon="building-office" wire:navigate>
-                            {{ __('Company Settings') }}
-                        </flux:menu.item>
+                        @if(auth()->user()->role === 'management')
+                            <flux:menu.item :href="route('company.edit')" icon="building-office" wire:navigate>
+                                {{ __('Company Settings') }}
+                            </flux:menu.item>
+                        @endif
                     </flux:menu.radio.group>
 
                     <flux:menu.separator />

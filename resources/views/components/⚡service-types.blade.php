@@ -10,6 +10,13 @@ new class extends Component
     public $name = '';
     public $editingId = null;
 
+    public function mount(): void
+    {
+        if (auth()->user()->role !== 'management') {
+            abort(403);
+        }
+    }
+
     public function rendering($view): void
     {
         $view->title(__('Services'));
