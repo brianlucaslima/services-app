@@ -2,10 +2,9 @@
 
 use App\Models\Customer;
 use Flux\Flux;
-use Livewire\Attributes\Title;
 use Livewire\Component;
 
-new #[Title('Customers')] class extends Component
+new class extends Component
 {
     public string $search = '';
 
@@ -16,6 +15,11 @@ new #[Title('Customers')] class extends Component
     public function mount(): void
     {
         $this->refreshCustomers();
+    }
+
+    public function rendering($view): void
+    {
+        $view->title(__('Customers'));
     }
 
     public function toggleStatus(int $id): void
@@ -75,14 +79,14 @@ new #[Title('Customers')] class extends Component
         <div>
             <div class="flex items-center gap-3">
                 <h1 class="text-xl font-semibold text-zinc-900 dark:text-white sm:text-2xl">
-                    Clientes
+                    {{ __('Customers') }}
                 </h1>
                 <span class="inline-flex items-center rounded-md bg-zinc-100 px-2 py-1 text-xs font-medium text-zinc-600 ring-1 ring-inset ring-zinc-500/10 dark:bg-zinc-400/10 dark:text-zinc-400 dark:ring-zinc-400/20">
                     {{ count($customers) }}
                 </span>
             </div>
             <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-                Gerencie seus contatos e cadastros em um só lugar.
+                {{ __('Manage your contacts and registrations in one place.') }}
             </p>
         </div>
 
@@ -91,7 +95,7 @@ new #[Title('Customers')] class extends Component
             <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
             </svg>
-            Novo cliente
+            {{ __('New customer') }}
         </a>
     </header>
 
@@ -100,10 +104,10 @@ new #[Title('Customers')] class extends Component
         <!-- Tabs de Status (Estilo Flux) -->
         <div class="flex w-full rounded-lg bg-zinc-100 p-1 dark:bg-zinc-900/80 sm:w-auto">
             <button type="button" wire:click="$set('tab', 'active')" class="flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-all sm:flex-initial {{ $tab === 'active' ? 'bg-white text-zinc-900 shadow-sm ring-1 ring-zinc-900/5 dark:bg-zinc-800 dark:text-white dark:ring-white/10' : 'text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200' }}">
-                Ativos
+                {{ __('Active (plural)') }}
             </button>
             <button type="button" wire:click="$set('tab', 'inactive')" class="flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-all sm:flex-initial {{ $tab === 'inactive' ? 'bg-white text-zinc-900 shadow-sm ring-1 ring-zinc-900/5 dark:bg-zinc-800 dark:text-white dark:ring-white/10' : 'text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200' }}">
-                Inativos
+                {{ __('Inactive (plural)') }}
             </button>
         </div>
 
@@ -114,7 +118,7 @@ new #[Title('Customers')] class extends Component
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/>
                 </svg>
             </div>
-            <input wire:model.live.debounce.300ms="search" type="search" placeholder="Buscar clientes..." class="block w-full rounded-lg border-0 py-2 pl-10 pr-3 text-zinc-900 shadow-sm ring-1 ring-inset ring-zinc-300 placeholder:text-zinc-400 focus:ring-2 focus:ring-inset focus:ring-zinc-900 dark:bg-zinc-900 dark:text-white dark:ring-zinc-700 dark:placeholder:text-zinc-500 dark:focus:ring-white sm:text-sm sm:leading-6" />
+            <input wire:model.live.debounce.300ms="search" type="search" placeholder="{{ __('Search customers...') }}" class="block w-full rounded-lg border-0 py-2 pl-10 pr-3 text-zinc-900 shadow-sm ring-1 ring-inset ring-zinc-300 placeholder:text-zinc-400 focus:ring-2 focus:ring-inset focus:ring-zinc-900 dark:bg-zinc-900 dark:text-white dark:ring-zinc-700 dark:placeholder:text-zinc-500 dark:focus:ring-white sm:text-sm sm:leading-6" />
         </div>
     </div>
 
@@ -122,7 +126,7 @@ new #[Title('Customers')] class extends Component
     <main class="border-y border-zinc-200 bg-white sm:rounded-xl sm:border sm:shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
         @if (empty($customers))
             <div class="px-6 py-14 text-center text-sm text-zinc-500 dark:text-zinc-400">
-                Nenhum cliente encontrado nesta visualização.
+                {{ __('No customers found in this view.') }}
             </div>
         @else
             <ul role="list" class="divide-y divide-zinc-200 dark:divide-zinc-800 rounded-xl ">
@@ -134,9 +138,9 @@ new #[Title('Customers')] class extends Component
                                     {{ $customer['name'] }}
                                 </p>
                                 @if ($customer['is_active'])
-                                    <span class="inline-flex items-center rounded-md bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700 ring-1 ring-inset ring-emerald-600/20 dark:bg-emerald-400/10 dark:text-emerald-400 dark:ring-emerald-400/20">Ativo</span>
+                                    <span class="inline-flex items-center rounded-md bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700 ring-1 ring-inset ring-emerald-600/20 dark:bg-emerald-400/10 dark:text-emerald-400 dark:ring-emerald-400/20">{{ __('Active') }}</span>
                                 @else
-                                    <span class="inline-flex items-center rounded-md bg-zinc-50 px-2 py-1 text-xs font-medium text-zinc-600 ring-1 ring-inset ring-zinc-500/10 dark:bg-zinc-400/10 dark:text-zinc-400 dark:ring-zinc-400/20">Inativo</span>
+                                    <span class="inline-flex items-center rounded-md bg-zinc-50 px-2 py-1 text-xs font-medium text-zinc-600 ring-1 ring-inset ring-zinc-500/10 dark:bg-zinc-400/10 dark:text-zinc-400 dark:ring-zinc-400/20">{{ __('Inactive') }}</span>
                                 @endif
                             </div>
                             <div class="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs leading-5 text-zinc-500 dark:text-zinc-400">
@@ -157,10 +161,10 @@ new #[Title('Customers')] class extends Component
 
                         <div class="flex items-center gap-x-3 border-t border-zinc-200 pt-3 dark:border-zinc-700/60 sm:border-t-0 sm:pt-0">
                             <a href="{{ route('customers.form', ['id' => $customer['id']]) }}" wire:navigate class="flex-1 rounded-md bg-white px-3 py-1.5 text-center text-sm font-semibold text-zinc-900 shadow-sm ring-1 ring-inset ring-zinc-300 hover:bg-zinc-50 sm:flex-none dark:bg-zinc-800 dark:text-zinc-100 dark:ring-zinc-700 dark:hover:bg-zinc-700/50 transition">
-                                Editar
+                                {{ __('Edit') }}
                             </a>
                             <button type="button" wire:click="toggleStatus({{ $customer['id'] }})" class="flex-1 rounded-md bg-white px-3 py-1.5 text-center text-sm font-semibold text-zinc-900 shadow-sm ring-1 ring-inset ring-zinc-300 hover:bg-zinc-50 sm:flex-none dark:bg-zinc-800 dark:text-zinc-100 dark:ring-zinc-700 dark:hover:bg-zinc-700/50 transition">
-                                {{ $customer['is_active'] ? 'Desativar' : 'Ativar' }}
+                                {{ $customer['is_active'] ? __('Deactivate') : __('Activate') }}
                             </button>
                         </div>
                     </li>
@@ -172,7 +176,7 @@ new #[Title('Customers')] class extends Component
     <!-- 4. BOTÃO FLUTUANTE (FAB) - Mobile -->
     <a href="{{ route('customers.form') }}" wire:navigate
        class="sm:hidden fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-zinc-900 text-white shadow-xl hover:bg-zinc-800 active:scale-90 dark:bg-zinc-100 dark:text-zinc-900 transition-all duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900"
-       aria-label="Cadastrar novo cliente">
+       aria-label="{{ __('Register new customer') }}">
         <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
         </svg>

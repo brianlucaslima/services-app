@@ -1,0 +1,22 @@
+{
+    "Customers": "Customers",
+    "Customer status updated.": "Customer status updated.",
+    "Manage your contacts and registrations in one place.": "Manage your contacts and registrations in one place.",
+    "New customer": "New customer",
+    "Active": "Active",
+    "Inactive": "Inactive",
+    "Active (plural)": "Active",
+    "Inactive (plural)": "Inactive",
+    "Search customers...": "Search customers...",
+    "No customers found in this view.": "No customers found in this view.",
+    "Edit": "Edit",
+    "Deactivate": "Deactivate",
+    "Activate": "Activate",
+    "Register new customer": "Register new customer",
+    "Platform": "Platform",
+    "Dashboard": "Dashboard",
+    "Repository": "Repository",
+    "Documentation": "Documentation",
+    "Settings": "Settings",
+    "Log out": "Log out"
+}

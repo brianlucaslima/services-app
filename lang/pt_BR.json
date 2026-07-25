@@ -1,0 +1,22 @@
+{
+    "Customers": "Clientes",
+    "Customer status updated.": "Status do cliente atualizado.",
+    "Manage your contacts and registrations in one place.": "Gerencie seus contatos e cadastros em um só lugar.",
+    "New customer": "Novo cliente",
+    "Active": "Ativo",
+    "Inactive": "Inativo",
+    "Active (plural)": "Ativos",
+    "Inactive (plural)": "Inativos",
+    "Search customers...": "Buscar clientes...",
+    "No customers found in this view.": "Nenhum cliente encontrado nesta visualização.",
+    "Edit": "Editar",
+    "Deactivate": "Desativar",
+    "Activate": "Ativar",
+    "Register new customer": "Cadastrar novo cliente",
+    "Platform": "Plataforma",
+    "Dashboard": "Painel",
+    "Repository": "Repositório",
+    "Documentation": "Documentação",
+    "Settings": "Configurações",
+    "Log out": "Sair"
+}
