@@ -23,6 +23,7 @@ new class extends Component
     public $selectedServiceIds = [];
     public $invoiceDate;
     public $dueDate;
+    public $notes = '';
 
     // Manual Service state
     public bool $showManualModal = false;
@@ -47,7 +48,8 @@ new class extends Component
 
     public function refreshInvoices(): void
     {
-        $this->invoices = Invoice::with('customer')
+        $this->invoices = auth()->user()->company->invoices()
+            ->with('customer')
             ->latest()
             ->get()
             ->toArray();
@@ -56,6 +58,7 @@ new class extends Component
     public function goToSelectCustomer(): void
     {
         $this->selectedCustomerId = null;
+        $this->notes = '';
         $this->screen = 'list'; // To trigger state cleanup
         $this->screen = 'select_customer';
     }
@@ -64,12 +67,14 @@ new class extends Component
     {
         $this->selectedCustomerId = $id;
         $this->loadPendingServices();
+        $this->notes = auth()->user()->company->default_invoice_message ?? '';
         $this->screen = 'select_services';
     }
 
     public function loadPendingServices(): void
     {
         $this->pendingServices = ServiceInstance::query()
+            ->where('company_id', auth()->user()->company->id)
             ->where('status', 'completed')
             ->where('customer_id', $this->selectedCustomerId)
             ->whereDoesntHave('invoiceItem')
@@ -84,7 +89,7 @@ new class extends Component
                 'total' => $item->duration_hours * $item->hourly_rate,
             ])
             ->toArray();
-
+            
         $this->selectedServiceIds = array_column($this->pendingServices, 'id');
     }
 
@@ -94,11 +99,11 @@ new class extends Component
         $this->manualDescription = '';
         $this->manualHours = 1;
         // Try to get the rate from the customer's first address if possible
-        $customer = Customer::with('addresses')->find($this->selectedCustomerId);
+        $customer = auth()->user()->company->customers()->with('addresses')->find($this->selectedCustomerId);
         if ($customer && $customer->addresses->isNotEmpty()) {
             $this->manualRate = $customer->addresses->first()->hourly_rate;
         }
-
+        
         $this->showManualModal = true;
     }
 
@@ -113,10 +118,11 @@ new class extends Component
 
         $description = $this->manualDescription;
         if (empty($description) && $this->manualServiceTypeId) {
-            $description = ServiceType::find($this->manualServiceTypeId)->name;
+            $description = auth()->user()->company->serviceTypes()->findOrFail($this->manualServiceTypeId)->name;
         }
 
         ServiceInstance::create([
+            'company_id' => auth()->user()->company->id,
             'customer_id' => $this->selectedCustomerId,
             'service_type_id' => $this->manualServiceTypeId,
             'description' => $description,
@@ -141,21 +147,23 @@ new class extends Component
 
         DB::transaction(function() {
             // Simple invoice number generation
-            $count = Invoice::count() + 1;
+            $count = Invoice::where('company_id', auth()->user()->company->id)->count() + 1;
             $number = 'INV-' . now()->format('Y') . '-' . str_pad($count, 4, '0', STR_PAD_LEFT);
 
             $invoice = Invoice::create([
+                'company_id' => auth()->user()->company->id,
                 'customer_id' => $this->selectedCustomerId,
                 'number' => $number,
                 'date' => $this->invoiceDate,
                 'due_date' => $this->dueDate,
                 'status' => 'draft',
                 'total_amount' => 0,
+                'notes' => $this->notes,
             ]);
 
             $total = 0;
             $services = ServiceInstance::findMany($this->selectedServiceIds);
-
+            
             foreach ($services as $service) {
                 $amount = $service->duration_hours * $service->hourly_rate;
                 $total += $amount;
@@ -180,21 +188,21 @@ new class extends Component
 
     public function deleteInvoice(int $id): void
     {
-        Invoice::findOrFail($id)->delete();
+        auth()->user()->company->invoices()->findOrFail($id)->delete();
         $this->refreshInvoices();
         Flux::toast(variant: 'success', text: __('Invoice deleted.'));
     }
 
     public function cancelInvoice(int $id): void
     {
-        Invoice::findOrFail($id)->delete();
+        auth()->user()->company->invoices()->findOrFail($id)->delete();
         $this->refreshInvoices();
         Flux::toast(variant: 'success', text: __('Invoice cancelled. Services are now pending again.'));
     }
 
     public function markAsPaid(int $id): void
     {
-        Invoice::findOrFail($id)->update(['status' => 'paid']);
+        auth()->user()->company->invoices()->findOrFail($id)->update(['status' => 'paid']);
         $this->refreshInvoices();
         Flux::toast(variant: 'success', text: __('Invoice marked as paid.'));
     }
@@ -212,13 +220,13 @@ new class extends Component
     #[Computed]
     public function customers()
     {
-        return Customer::where('is_active', true)->orderBy('name')->get();
+        return auth()->user()->company->customers()->where('is_active', true)->orderBy('name')->get();
     }
 
     #[Computed]
     public function serviceTypes()
     {
-        return ServiceType::orderBy('name')->get();
+        return auth()->user()->company->serviceTypes()->orderBy('name')->get();
     }
 };
 
@@ -369,26 +377,33 @@ new class extends Component
 
             @if(!empty($selectedServiceIds))
                 <div class="fixed bottom-0 left-0 right-0 bg-white dark:bg-zinc-900 border-t border-zinc-200 dark:border-zinc-700 p-4 sm:relative sm:border sm:rounded-2xl sm:p-6 shadow-lg sm:shadow-sm animate-in slide-in-from-bottom duration-300 z-50">
-                    <div class="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-                        <div class="text-center sm:text-left">
-                            <p class="text-xs text-zinc-500 uppercase tracking-wider">{{ __('Total Selected') }} ({{ count($selectedServiceIds) }})</p>
-                            <p class="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
-                                {{ Number::currency(collect($pendingServices)->whereIn('id', $selectedServiceIds)->sum('total'), 'GBP') }}
-                            </p>
-                        </div>
+                    <div class="max-w-5xl mx-auto space-y-4">
+                        <flux:field>
+                            <flux:label>{{ __('Invoice Message') }}</flux:label>
+                            <flux:textarea wire:model="notes" rows="2" placeholder="{{ __('Add a message that will appear on this invoice...') }}" />
+                        </flux:field>
 
-                        <div class="flex items-center gap-3 w-full sm:w-auto">
-                            <div class="grid grid-cols-2 gap-3 w-full">
-                                <flux:field>
-                                    <flux:label class="hidden sm:block">{{ __('Invoice Date') }}</flux:label>
-                                    <flux:input type="date" wire:model="invoiceDate" size="sm" />
-                                </flux:field>
-                                <flux:field>
-                                    <flux:label class="hidden sm:block">{{ __('Due Date') }}</flux:label>
-                                    <flux:input type="date" wire:model="dueDate" size="sm" />
-                                </flux:field>
+                        <div class="flex flex-col sm:flex-row items-center justify-between gap-4 pt-2 border-t border-zinc-100 dark:border-zinc-800">
+                            <div class="text-center sm:text-left">
+                                <p class="text-xs text-zinc-500 uppercase tracking-wider">{{ __('Total Selected') }} ({{ count($selectedServiceIds) }})</p>
+                                <p class="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
+                                    {{ Number::currency(collect($pendingServices)->whereIn('id', $selectedServiceIds)->sum('total'), 'GBP') }}
+                                </p>
                             </div>
-                            <flux:button wire:click="generateInvoice" variant="primary" class="h-auto py-3 px-8 rounded-xl font-bold">{{ __('Generate') }}</flux:button>
+                            
+                            <div class="flex items-center gap-3 w-full sm:w-auto">
+                                <div class="grid grid-cols-2 gap-3 w-full">
+                                    <flux:field>
+                                        <flux:label class="hidden sm:block">{{ __('Invoice Date') }}</flux:label>
+                                        <flux:input type="date" wire:model="invoiceDate" size="sm" />
+                                    </flux:field>
+                                    <flux:field>
+                                        <flux:label class="hidden sm:block">{{ __('Due Date') }}</flux:label>
+                                        <flux:input type="date" wire:model="dueDate" size="sm" />
+                                    </flux:field>
+                                </div>
+                                <flux:button wire:click="generateInvoice" variant="primary" class="h-auto py-3 px-8 rounded-xl font-bold">{{ __('Generate') }}</flux:button>
+                            </div>
                         </div>
                     </div>
                 </div>

@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\ServiceType;
+use Illuminate\Validation\Rule;
 use Livewire\Component;
 use Flux\Flux;
 
@@ -16,18 +17,27 @@ new class extends Component
 
     public function getServiceTypesProperty()
     {
-        return ServiceType::orderBy('name')->get();
+        return auth()->user()->company->serviceTypes()->orderBy('name')->get();
     }
 
     public function save(): void
     {
-        $this->validate(['name' => 'required|string|max:255|unique:service_types,name,' . $this->editingId]);
+        $this->validate([
+            'name' => [
+                'required',
+                'string',
+                'max:255',
+                Rule::unique('service_types', 'name')
+                    ->ignore($this->editingId)
+                    ->where('company_id', auth()->user()->company->id)
+            ]
+        ]);
 
         if ($this->editingId) {
-            ServiceType::findOrFail($this->editingId)->update(['name' => $this->name]);
+            auth()->user()->company->serviceTypes()->findOrFail($this->editingId)->update(['name' => $this->name]);
             Flux::toast(variant: 'success', text: __('Service updated.'));
         } else {
-            ServiceType::create(['name' => $this->name]);
+            auth()->user()->company->serviceTypes()->create(['name' => $this->name]);
             Flux::toast(variant: 'success', text: __('Service created.'));
         }
 
@@ -36,14 +46,14 @@ new class extends Component
 
     public function edit(int $id): void
     {
-        $type = ServiceType::findOrFail($id);
+        $type = auth()->user()->company->serviceTypes()->findOrFail($id);
         $this->editingId = $type->id;
         $this->name = $type->name;
     }
 
     public function delete(int $id): void
     {
-        ServiceType::findOrFail($id)->delete();
+        auth()->user()->company->serviceTypes()->findOrFail($id)->delete();
         Flux::toast(variant: 'success', text: __('Service deleted.'));
     }
 

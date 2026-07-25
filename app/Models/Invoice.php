@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class Invoice extends Model
 {
     protected $fillable = [
+        'company_id',
         'customer_id',
         'number',
         'date',
@@ -23,6 +24,11 @@ class Invoice extends Model
         'due_date' => 'date',
         'total_amount' => 'decimal:2',
     ];
+
+    public function company(): BelongsTo
+    {
+        return $this->belongsTo(Company::class);
+    }
 
     public function customer(): BelongsTo
     {

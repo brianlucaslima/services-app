@@ -14,6 +14,8 @@ new class extends Component
 
     public string $email = '';
 
+    public string $address = '';
+
     public bool $is_active = true;
 
     public int|null $customerId = null;
@@ -23,10 +25,11 @@ new class extends Component
         $this->customerId = $id;
 
         if ($id) {
-            $customer = Customer::query()->findOrFail($id);
+            $customer = auth()->user()->company->customers()->findOrFail($id);
             $this->name = $customer->name;
             $this->phone = $customer->phone ?? '';
             $this->email = $customer->email ?? '';
+            $this->address = $customer->address ?? '';
             $this->is_active = (bool) $customer->is_active;
         }
     }
@@ -47,10 +50,10 @@ new class extends Component
         $validated['is_active'] = $this->is_active;
 
         if ($this->customerId) {
-            Customer::query()->findOrFail($this->customerId)->update($validated);
+            auth()->user()->company->customers()->findOrFail($this->customerId)->update($validated);
             Flux::toast(variant: 'success', text: __('Customer updated successfully.'));
         } else {
-            Customer::create($validated);
+            auth()->user()->company->customers()->create($validated);
             Flux::toast(variant: 'success', text: __('Customer created successfully.'));
         }
 
@@ -93,6 +96,12 @@ new class extends Component
                 <flux:label>{{ __('Email') }}</flux:label>
                 <flux:input wire:model="email" type="email" />
                 <flux:error name="email" />
+            </flux:field>
+
+            <flux:field class="sm:col-span-2">
+                <flux:label>{{ __('Billing Address') }}</flux:label>
+                <flux:textarea wire:model="address" placeholder="{{ __('Full billing address for invoices...') }}" rows="3" />
+                <flux:error name="address" />
             </flux:field>
 
             <div class="sm:col-span-2">

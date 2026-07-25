@@ -29,6 +29,10 @@
                         {{ __('Services') }}
                     </flux:sidebar.item>
 
+                    <flux:sidebar.item icon="building-office" :href="route('company.edit')" :current="request()->routeIs('company.edit')" wire:navigate>
+                        {{ __('Company Settings') }}
+                    </flux:sidebar.item>
+
                     <flux:sidebar.item
                         :href="route('customers')"
                         :current="request()->routeIs('customers')"
@@ -89,6 +93,9 @@
                     <flux:menu.radio.group>
                         <flux:menu.item :href="route('profile.edit')" icon="cog" wire:navigate>
                             {{ __('Settings') }}
+                        </flux:menu.item>
+                        <flux:menu.item :href="route('company.edit')" icon="building-office" wire:navigate>
+                            {{ __('Company Settings') }}
                         </flux:menu.item>
                     </flux:menu.radio.group>
 

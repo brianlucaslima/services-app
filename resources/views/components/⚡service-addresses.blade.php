@@ -31,7 +31,7 @@ new class extends Component
 
     public function mount(int $id): void
     {
-        $this->customer = Customer::findOrFail($id);
+        $this->customer = auth()->user()->company->customers()->findOrFail($id);
         $this->refreshAddresses();
     }
 
@@ -55,7 +55,7 @@ new class extends Component
     public function openEditModal(int $id): void
     {
         $this->resetForm();
-        $address = ServiceAddress::with('schedules')->findOrFail($id);
+        $address = $this->customer->addresses()->with('schedules')->findOrFail($id);
         $this->addressId = $address->id;
         $this->label = $address->label;
         $this->address = $address->address;
@@ -174,7 +174,7 @@ new class extends Component
 
     public function deleteAddress(int $id): void
     {
-        ServiceAddress::findOrFail($id)->delete();
+        $this->customer->addresses()->findOrFail($id)->delete();
         Flux::toast(variant: 'success', text: __('Address deleted.'));
         $this->refreshAddresses();
     }
@@ -182,7 +182,7 @@ new class extends Component
     #[Computed]
     public function serviceTypes()
     {
-        return ServiceType::orderBy('name')->get();
+        return auth()->user()->company->serviceTypes()->orderBy('name')->get();
     }
 };
 

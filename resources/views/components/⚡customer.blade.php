@@ -33,7 +33,7 @@ new class extends Component
 
     public function refreshCustomers(): void
     {
-        $query = Customer::query()
+        $query = auth()->user()->company->customers()
             ->latest()
             ->when($this->search !== '', function ($query) {
                 $query->where(function ($query) {

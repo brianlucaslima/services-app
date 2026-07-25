@@ -76,7 +76,8 @@ new class extends Component
         $this->notes = '';
         
         // Find existing instance to load notes if any
-        $instance = ServiceInstance::where('service_schedule_id', $scheduleId)
+        $instance = ServiceInstance::where('company_id', auth()->user()->company->id)
+            ->where('service_schedule_id', $scheduleId)
             ->where('original_date', $date)
             ->first();
             
@@ -89,13 +90,20 @@ new class extends Component
 
     public function skipOccurrence(int $scheduleId, string $date): void
     {
-        $schedule = ServiceSchedule::findOrFail($scheduleId);
+        $schedule = ServiceSchedule::with('address')->findOrFail($scheduleId);
         
         ServiceInstance::updateOrCreate(
             ['service_schedule_id' => $scheduleId, 'original_date' => $date],
             [
+                'company_id' => auth()->user()->company->id,
+                'customer_id' => $schedule->address->customer_id,
+                'service_address_id' => $schedule->service_address_id,
+                'service_type_id' => $schedule->service_type_id,
+                'description' => $schedule->description ?: ($schedule->type ? $schedule->type->name : __('Service at') . ' ' . $schedule->address->label),
                 'date' => $date,
                 'time' => $schedule->start_time,
+                'duration_hours' => $schedule->address->duration_hours,
+                'hourly_rate' => $schedule->address->hourly_rate,
                 'status' => 'skipped'
             ]
         );
@@ -109,7 +117,8 @@ new class extends Component
         $schedule = ServiceSchedule::with(['address', 'type'])->findOrFail($this->selectedScheduleId);
         
         // If it was already rescheduled, we should use its current date/time
-        $instance = ServiceInstance::where('service_schedule_id', $this->selectedScheduleId)
+        $instance = ServiceInstance::where('company_id', auth()->user()->company->id)
+            ->where('service_schedule_id', $this->selectedScheduleId)
             ->where('original_date', $this->selectedOriginalDate)
             ->first();
 
@@ -124,6 +133,7 @@ new class extends Component
         ServiceInstance::updateOrCreate(
             ['service_schedule_id' => $this->selectedScheduleId, 'original_date' => $this->selectedOriginalDate],
             [
+                'company_id' => auth()->user()->company->id,
                 'customer_id' => $schedule->address->customer_id,
                 'service_address_id' => $schedule->service_address_id,
                 'service_type_id' => $schedule->service_type_id,
@@ -144,11 +154,19 @@ new class extends Component
 
     public function saveReschedule(): void
     {
+        $schedule = ServiceSchedule::with('address')->findOrFail($this->selectedScheduleId);
         ServiceInstance::updateOrCreate(
             ['service_schedule_id' => $this->selectedScheduleId, 'original_date' => $this->selectedOriginalDate],
             [
+                'company_id' => auth()->user()->company->id,
+                'customer_id' => $schedule->address->customer_id,
+                'service_address_id' => $schedule->service_address_id,
+                'service_type_id' => $schedule->service_type_id,
+                'description' => $schedule->description ?: ($schedule->type ? $schedule->type->name : __('Service at') . ' ' . $schedule->address->label),
                 'date' => $this->newDate,
                 'time' => $this->newTime,
+                'duration_hours' => $schedule->address->duration_hours,
+                'hourly_rate' => $schedule->address->hourly_rate,
                 'status' => $this->rescheduleMode === 'skip' ? 'skipped' : 'scheduled'
             ]
         );
@@ -164,13 +182,14 @@ new class extends Component
         $end = $start->copy()->endOfWeek();
         $period = CarbonPeriod::create($start, $end);
         
-        $schedules = ServiceSchedule::query()
+        $companyId = auth()->user()->company->id;
+        $schedules = ServiceSchedule::whereHas('address.customer', fn($q) => $q->where('company_id', $companyId))
             ->with(['address.customer'])
             ->where('is_active', true)
             ->get();
 
         // Get all instances in or affecting this week
-        $instances = ServiceInstance::query()
+        $instances = ServiceInstance::where('company_id', $companyId)
             ->with(['schedule.address.customer'])
             ->where(function($query) use ($start, $end) {
                 $query->whereBetween('date', [$start->format('Y-m-d'), $end->format('Y-m-d')])

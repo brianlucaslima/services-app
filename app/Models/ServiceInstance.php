@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 class ServiceInstance extends Model
 {
     protected $fillable = [
+        'company_id',
         'customer_id',
         'service_address_id',
         'service_schedule_id',
@@ -29,6 +30,11 @@ class ServiceInstance extends Model
         'duration_hours' => 'decimal:2',
         'hourly_rate' => 'decimal:2',
     ];
+
+    public function company(): BelongsTo
+    {
+        return $this->belongsTo(Company::class);
+    }
 
     public function type(): BelongsTo
     {
