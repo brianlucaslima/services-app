@@ -34,7 +34,7 @@ class CreateOrUpdateCollaboratorAction extends Action
             ],
             'role' => 'required|in:management,collaborator',
             'hourlyRate' => 'required|numeric|min:0',
-            'password' => $this->userId ? 'nullable|string|min:6' : 'required|string|min:6',
+            'password' => $this->userId ? 'nullable|string|min:8' : 'required|string|min:8',
         ];
     }
 
