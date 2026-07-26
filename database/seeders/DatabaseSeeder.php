@@ -33,7 +33,6 @@ class DatabaseSeeder extends Seeder
             'email' => 'brianlucas67@gmail.com',
             'password' => Hash::make('admin@admin'),
             'role' => 'management',
-            'hourly_rate' => 25.00,
         ]);
 
         // 2. Create Company
@@ -52,6 +51,10 @@ class DatabaseSeeder extends Seeder
         ]);
 
         $user->update(['company_id' => $company->id]);
+        $user->companies()->attach($company->id, [
+            'role' => 'management',
+            'hourly_rate' => 25.00,
+        ]);
 
         // 3. Create Collaborators
         $john = User::create([
@@ -59,6 +62,9 @@ class DatabaseSeeder extends Seeder
             'name' => 'John Doe',
             'email' => 'john@example.com',
             'password' => Hash::make('password'),
+            'role' => 'collaborator',
+        ]);
+        $john->companies()->attach($company->id, [
             'role' => 'collaborator',
             'hourly_rate' => 12.50,
         ]);
@@ -68,6 +74,9 @@ class DatabaseSeeder extends Seeder
             'name' => 'Mary Smith',
             'email' => 'mary@example.com',
             'password' => Hash::make('password'),
+            'role' => 'collaborator',
+        ]);
+        $mary->companies()->attach($company->id, [
             'role' => 'collaborator',
             'hourly_rate' => 14.00,
         ]);

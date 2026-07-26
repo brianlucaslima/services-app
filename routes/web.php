@@ -1,20 +1,12 @@
 <?php
 
+use App\Http\Controllers\AppController;
 use App\Http\Controllers\PdfController;
 use Illuminate\Support\Facades\Route;
 
 Route::view('/', 'welcome')->name('home');
 
-Route::get('lang/{locale}', function ($locale) {
-    if (in_array($locale, ['en_GB', 'pt_BR'])) {
-        session(['locale' => $locale]);
-        if (auth()->check()) {
-            auth()->user()->update(['locale' => $locale]);
-        }
-    }
-
-    return redirect()->back();
-})->name('lang.switch');
+Route::get('lang/{locale}', [AppController::class, 'switchLanguage'])->name('lang.switch');
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::livewire('dashboard', 'dashboard')->name('dashboard');
@@ -31,6 +23,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::get('reports/{id}/pdf', [PdfController::class, 'collaboratorReport'])->name('reports.pdf');
     Route::get('invoices/{id}/pdf', [PdfController::class, 'invoice'])->name('invoices.pdf');
+
+    Route::get('switch-company/{id}', [AppController::class, 'switchCompany'])->name('company.switch');
 });
 
 require __DIR__.'/settings.php';

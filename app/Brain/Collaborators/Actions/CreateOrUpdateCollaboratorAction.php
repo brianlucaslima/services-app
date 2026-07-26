@@ -7,7 +7,6 @@ namespace App\Brain\Collaborators\Actions;
 use App\Models\User;
 use Brain\Action;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Validation\Rule;
 
 /**
  * Action CreateOrUpdateCollaboratorAction
@@ -29,8 +28,25 @@ class CreateOrUpdateCollaboratorAction extends Action
             'companyId' => 'required|exists:companies,id',
             'name' => 'required|string|max:255',
             'email' => [
-                'required', 'email', 'max:255',
-                Rule::unique('users', 'email')->ignore($this->userId),
+                'required',
+                'email',
+                'max:255',
+                function ($attribute, $value, $fail) {
+                    $user = User::where('email', $value)->first();
+                    if ($user) {
+                        if ($this->userId) {
+                            if ($user->id !== $this->userId) {
+                                $fail(__('The email has already been taken.'));
+                            }
+                        } else {
+                            // Fail only if they are already registered in this company
+                            $alreadyInCompany = $user->companies()->where('companies.id', $this->companyId)->exists();
+                            if ($alreadyInCompany) {
+                                $fail(__('This collaborator is already registered in your company.'));
+                            }
+                        }
+                    }
+                },
             ],
             'role' => 'required|in:management,collaborator',
             'hourlyRate' => 'required|numeric|min:0',
@@ -40,26 +56,42 @@ class CreateOrUpdateCollaboratorAction extends Action
 
     public function handle(): self
     {
-        $data = [
+        $userData = [
             'name' => $this->name,
-            'email' => $this->email,
-            'role' => $this->role,
-            'hourly_rate' => $this->hourlyRate,
         ];
 
         if ($this->password) {
-            $data['password'] = Hash::make($this->password);
+            $userData['password'] = Hash::make($this->password);
         }
 
         if ($this->userId) {
             $user = User::where('company_id', $this->companyId)->findOrFail($this->userId);
-            $user->update($data);
+
+            $userData['email'] = $this->email;
+            $user->update($userData);
         } else {
-            $user = User::create([
-                'company_id' => $this->companyId,
-                ...$data,
-            ]);
+            // Check if user exists globally by email
+            $user = User::where('email', $this->email)->first();
+
+            if ($user) {
+                // Registering an existing global user into a NEW company
+                if (! $user->company_id) {
+                    $user->update(['company_id' => $this->companyId]);
+                }
+            } else {
+                // New user globally
+                $userData['email'] = $this->email;
+                $userData['company_id'] = $this->companyId;
+
+                $user = User::create($userData);
+            }
         }
+
+        // Sync the pivot table values for this company
+        $user->companies()->syncWithPivotValues([$this->companyId], [
+            'role' => $this->role,
+            'hourly_rate' => $this->hourlyRate,
+        ], false);
 
         $this->resolvedUserId = $user->id;
 

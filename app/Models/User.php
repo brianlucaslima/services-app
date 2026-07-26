@@ -62,9 +62,63 @@ class User extends Authenticatable implements PasskeyUser
             : $initials;
     }
 
+    public ?float $tempHourlyRate = null;
+
+    protected static function booted()
+    {
+        static::saving(function ($user) {
+            if (array_key_exists('hourly_rate', $user->attributes)) {
+                $user->tempHourlyRate = (float) $user->attributes['hourly_rate'];
+                unset($user->attributes['hourly_rate']);
+            }
+        });
+
+        static::saved(function ($user) {
+            $companyId = $user->company_id;
+
+            if ($companyId) {
+                $pivotData = [];
+                if ($user->tempHourlyRate !== null) {
+                    $pivotData['hourly_rate'] = $user->tempHourlyRate;
+                    $user->tempHourlyRate = null;
+                }
+
+                // If role is set on the user model, sync it to the pivot
+                if (array_key_exists('role', $user->attributes)) {
+                    $pivotData['role'] = $user->attributes['role'];
+                }
+
+                if (! empty($pivotData)) {
+                    $user->companies()->syncWithPivotValues([$companyId], $pivotData, false);
+                }
+            }
+        });
+    }
+
     public function company(): BelongsTo
     {
         return $this->belongsTo(Company::class);
+    }
+
+    public function companies(): BelongsToMany
+    {
+        return $this->belongsToMany(Company::class, 'company_user')
+            ->withPivot(['role', 'hourly_rate'])
+            ->withTimestamps();
+    }
+
+    public function getRoleAttribute()
+    {
+        // Try to get company-specific role first
+        $companyRole = $this->companies()->where('companies.id', $this->company_id)->first()?->pivot->role;
+
+        // Fallback to the global role in users table
+        return $companyRole ?? ($this->attributes['role'] ?? 'collaborator');
+    }
+
+    public function getHourlyRateAttribute()
+    {
+        return (float) ($this->companies()->where('companies.id', $this->company_id)->first()?->pivot->hourly_rate ?? 0.00);
     }
 
     public function schedules(): BelongsToMany

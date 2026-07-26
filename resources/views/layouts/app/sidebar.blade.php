@@ -95,6 +95,16 @@
 
                     <flux:menu.separator />
 
+                    @if(auth()->user()->companies->count() > 1)
+                        <flux:menu.heading>{{ __('Switch Company') }}</flux:menu.heading>
+                        @foreach(auth()->user()->companies as $c)
+                            <flux:menu.item :href="route('company.switch', ['id' => $c->id])" icon="{{ $c->id === auth()->user()->company_id ? 'check' : 'building-office' }}">
+                                {{ $c->name }}
+                            </flux:menu.item>
+                        @endforeach
+                        <flux:menu.separator />
+                    @endif
+
                     <flux:menu.radio.group>
                         <flux:menu.item :href="route('profile.edit')" icon="cog" wire:navigate>
                             {{ __('Settings') }}
