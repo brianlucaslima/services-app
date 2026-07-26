@@ -116,39 +116,14 @@ new class extends Component
 
     public function saveCompletion(): void
     {
-        $schedule = ServiceSchedule::with(['address', 'type', 'users'])->findOrFail($this->selectedScheduleId);
-        
-        // If it was already rescheduled, we should use its current date/time
-        $instance = ServiceInstance::where('company_id', auth()->user()->company->id)
-            ->where('service_schedule_id', $this->selectedScheduleId)
-            ->where('original_date', $this->selectedOriginalDate)
-            ->first();
-
-        $description = $schedule->description;
-        if (empty($description) && $schedule->type) {
-            $description = $schedule->type->name;
-        }
-        if (empty($description)) {
-            $description = __('Service at') . ' ' . $schedule->address->label;
-        }
-
-        $completedInstance = ServiceInstance::updateOrCreate(
-            ['service_schedule_id' => $this->selectedScheduleId, 'original_date' => $this->selectedOriginalDate],
-            [
-                'company_id' => auth()->user()->company->id,
-                'customer_id' => $schedule->address->customer_id,
-                'service_address_id' => $schedule->service_address_id,
-                'service_type_id' => $schedule->service_type_id,
-                'description' => $description,
-                'date' => $instance->date ?? $this->selectedOriginalDate,
-                'time' => $instance->time ?? $schedule->start_time,
-                'duration_hours' => $schedule->address->duration_hours,
-                'hourly_rate' => $schedule->address->hourly_rate,
-                'status' => 'completed',
-                'notes' => $this->notes
-            ]
-        );
-        $completedInstance->users()->sync($schedule->users()->pluck('users.id')->toArray());
+        // Run the UpdateServiceOccurrenceWorkflow!
+        \App\Brain\Agenda\Workflows\UpdateServiceOccurrenceWorkflow::run([
+            'scheduleId' => $this->selectedScheduleId,
+            'originalDate' => $this->selectedOriginalDate,
+            'companyId' => auth()->user()->company->id,
+            'status' => 'completed',
+            'notes' => $this->notes,
+        ]);
 
         $this->showCompletionModal = false;
         $this->refreshAgenda();
@@ -157,23 +132,15 @@ new class extends Component
 
     public function saveReschedule(): void
     {
-        $schedule = ServiceSchedule::with(['address', 'users'])->findOrFail($this->selectedScheduleId);
-        $rescheduledInstance = ServiceInstance::updateOrCreate(
-            ['service_schedule_id' => $this->selectedScheduleId, 'original_date' => $this->selectedOriginalDate],
-            [
-                'company_id' => auth()->user()->company->id,
-                'customer_id' => $schedule->address->customer_id,
-                'service_address_id' => $schedule->service_address_id,
-                'service_type_id' => $schedule->service_type_id,
-                'description' => $schedule->description ?: ($schedule->type ? $schedule->type->name : __('Service at') . ' ' . $schedule->address->label),
-                'date' => $this->newDate,
-                'time' => $this->newTime,
-                'duration_hours' => $schedule->address->duration_hours,
-                'hourly_rate' => $schedule->address->hourly_rate,
-                'status' => $this->rescheduleMode === 'skip' ? 'skipped' : 'scheduled'
-            ]
-        );
-        $rescheduledInstance->users()->sync($schedule->users()->pluck('users.id')->toArray());
+        // Run the UpdateServiceOccurrenceWorkflow!
+        \App\Brain\Agenda\Workflows\UpdateServiceOccurrenceWorkflow::run([
+            'scheduleId' => $this->selectedScheduleId,
+            'originalDate' => $this->selectedOriginalDate,
+            'companyId' => auth()->user()->company->id,
+            'date' => $this->newDate,
+            'time' => $this->newTime,
+            'status' => $this->rescheduleMode === 'skip' ? 'skipped' : 'scheduled',
+        ]);
 
         $this->showRescheduleModal = false;
         $this->refreshAgenda();
