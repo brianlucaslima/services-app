@@ -304,68 +304,23 @@ new class extends Component
 
     public function sendEmail(): void
     {
-        $invoice = auth()->user()->company->invoices()->with(['customer', 'company', 'items'])->findOrFail($this->selectedInvoiceId);
+        $invoice = auth()->user()->company->invoices()->with(['customer', 'company'])->findOrFail($this->selectedInvoiceId);
 
         if (!$invoice->customer->email) {
             Flux::toast(variant: 'danger', text: __('Customer has no email address.'));
             return;
         }
 
-        // Render the PDF view in the background and get binary data
-        $originalLocale = app()->getLocale();
-        app()->setLocale('en'); // Always English on PDFs & Emails
-        
         try {
-            $pdf = Pdf::loadView('pdf.invoice', [
-                'invoice' => $invoice,
-            ]);
-            $pdfData = $pdf->output();
-
-            $fileName = strtolower($invoice->number).($invoice->status === 'draft' ? '-draft' : '').'.pdf';
-
-            // Retrieve all company administrators to add in CC
-            $managementEmails = $invoice->company->users()
-                ->where('role', 'management')
-                ->whereNotNull('email')
-                ->pluck('email')
-                ->toArray();
-
-            $mail = \Illuminate\Support\Facades\Mail::to($invoice->customer->email);
-
-            if (!empty($managementEmails)) {
-                $mail->cc($managementEmails);
-            }
-
-            $mail->send(new \App\Mail\InvoiceMail($invoice, $pdfData, $fileName));
-            
-            // If the invoice is in draft, update status to sent
-            if ($invoice->status === 'draft') {
-                $invoice->update(['status' => 'sent']);
-                $this->refreshInvoices();
-            }
-
-            // Log Success
-            \App\Models\EmailLog::create([
-                'company_id' => auth()->user()->company->id,
-                'invoice_id' => $invoice->id,
-                'recipient_email' => $invoice->customer->email,
-                'status' => 'success',
+            // Run the SendInvoiceEmailWorkflow!
+            \App\Brain\Invoices\Workflows\SendInvoiceEmailWorkflow::run([
+                'invoiceId' => $invoice->id,
             ]);
 
+            $this->refreshInvoices();
             Flux::toast(variant: 'success', text: __('Invoice sent by email successfully.'));
         } catch (\Exception $e) {
-            // Log Failure
-            \App\Models\EmailLog::create([
-                'company_id' => auth()->user()->company->id,
-                'invoice_id' => $invoice->id,
-                'recipient_email' => $invoice->customer->email,
-                'status' => 'failed',
-                'error_message' => $e->getMessage(),
-            ]);
-
             Flux::toast(variant: 'danger', text: __('Failed to send email. Please check your mail settings.'));
-        } finally {
-            app()->setLocale($originalLocale); // Restore original locale
         }
 
         $this->refreshEmailLogs();
@@ -374,62 +329,24 @@ new class extends Component
     public function resendEmail(int $logId): void
     {
         $log = \App\Models\EmailLog::findOrFail($logId);
-        $invoice = auth()->user()->company->invoices()->with(['customer', 'company', 'items'])->findOrFail($log->invoice_id);
+        $invoice = auth()->user()->company->invoices()->with(['customer', 'company'])->findOrFail($log->invoice_id);
 
         if (!$log->recipient_email) {
             Flux::toast(variant: 'danger', text: __('No recipient email address.'));
             return;
         }
 
-        // Generate the PDF binary content
-        $originalLocale = app()->getLocale();
-        app()->setLocale('en'); // Always English on PDFs & Emails
-
         try {
-            $pdf = Pdf::loadView('pdf.invoice', [
-                'invoice' => $invoice,
-            ]);
-            $pdfData = $pdf->output();
-
-            $fileName = strtolower($invoice->number).($invoice->status === 'draft' ? '-draft' : '').'.pdf';
-
-            // Retrieve all company administrators to add in CC
-            $managementEmails = $invoice->company->users()
-                ->where('role', 'management')
-                ->whereNotNull('email')
-                ->pluck('email')
-                ->toArray();
-
-            $mail = \Illuminate\Support\Facades\Mail::to($log->recipient_email);
-
-            if (!empty($managementEmails)) {
-                $mail->cc($managementEmails);
-            }
-
-            $mail->send(new \App\Mail\InvoiceMail($invoice, $pdfData, $fileName));
-            
-            // Create a new success log
-            \App\Models\EmailLog::create([
-                'company_id' => auth()->user()->company->id,
-                'invoice_id' => $invoice->id,
-                'recipient_email' => $log->recipient_email,
-                'status' => 'success',
+            // Run the SendInvoiceEmailWorkflow overriding the recipient email!
+            \App\Brain\Invoices\Workflows\SendInvoiceEmailWorkflow::run([
+                'invoiceId' => $invoice->id,
+                'recipientEmail' => $log->recipient_email,
             ]);
 
+            $this->refreshInvoices();
             Flux::toast(variant: 'success', text: __('Invoice resent by email successfully.'));
         } catch (\Exception $e) {
-            // Create a new failed log
-            \App\Models\EmailLog::create([
-                'company_id' => auth()->user()->company->id,
-                'invoice_id' => $invoice->id,
-                'recipient_email' => $log->recipient_email,
-                'status' => 'failed',
-                'error_message' => $e->getMessage(),
-            ]);
-
             Flux::toast(variant: 'danger', text: __('Failed to resend email. Please check your mail settings.'));
-        } finally {
-            app()->setLocale($originalLocale); // Restore original locale
         }
 
         $this->refreshEmailLogs();
