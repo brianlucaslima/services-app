@@ -38,15 +38,10 @@ new class extends Component
 
     public function extend30Days(int $companyId): void
     {
-        $company = Company::findOrFail($companyId);
-        
-        $currentEndsAt = $company->subscription_ends_at;
-        $baseDate = ($currentEndsAt && $currentEndsAt->isFuture()) ? $currentEndsAt : now();
-        $newEndsAt = $baseDate->addDays(30);
-
-        $company->update([
-            'subscription_status' => 'active',
-            'subscription_ends_at' => $newEndsAt,
+        \App\Brain\Subscriptions\Workflows\ExtendSubscriptionWorkflow::run([
+            'companyId' => $companyId,
+            'status' => 'active',
+            'daysToExtend' => 30,
         ]);
 
         Flux::toast(variant: 'success', text: __('Subscription extended by 30 days.'));
@@ -54,15 +49,10 @@ new class extends Component
 
     public function extend1Year(int $companyId): void
     {
-        $company = Company::findOrFail($companyId);
-        
-        $currentEndsAt = $company->subscription_ends_at;
-        $baseDate = ($currentEndsAt && $currentEndsAt->isFuture()) ? $currentEndsAt : now();
-        $newEndsAt = $baseDate->addDays(365);
-
-        $company->update([
-            'subscription_status' => 'active',
-            'subscription_ends_at' => $newEndsAt,
+        \App\Brain\Subscriptions\Workflows\ExtendSubscriptionWorkflow::run([
+            'companyId' => $companyId,
+            'status' => 'active',
+            'daysToExtend' => 365,
         ]);
 
         Flux::toast(variant: 'success', text: __('Subscription extended by 1 year.'));
@@ -70,11 +60,9 @@ new class extends Component
 
     public function suspendAccess(int $companyId): void
     {
-        $company = Company::findOrFail($companyId);
-
-        $company->update([
-            'subscription_status' => 'expired',
-            'subscription_ends_at' => now()->subDay(),
+        \App\Brain\Subscriptions\Workflows\ExtendSubscriptionWorkflow::run([
+            'companyId' => $companyId,
+            'status' => 'expired',
         ]);
 
         Flux::toast(variant: 'danger', text: __('Subscription suspended.'));
