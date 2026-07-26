@@ -13,6 +13,8 @@ use Illuminate\Support\Facades\DB;
 new class extends Component
 {
     public $invoices = [];
+    public array $emailLogs = [];
+    public string $listTab = 'invoices';
 
     // Screens: 'list', 'select_customer', 'select_services', 'detail'
     public string $screen = 'list';
@@ -42,6 +44,7 @@ new class extends Component
     public $manualHours = 1;
     public $manualRate = 0;
     public array $manualUserIds = [];
+    public $manualAddressId = null;
 
     public function mount(): void
     {
@@ -53,6 +56,7 @@ new class extends Component
         $this->dueDate = now()->addDays(14)->format('Y-m-d');
         $this->manualDate = now()->format('Y-m-d');
         $this->refreshInvoices();
+        $this->refreshEmailLogs();
     }
 
     public function rendering($view): void
@@ -85,6 +89,32 @@ new class extends Component
         }
 
         $this->invoices = $query->latest()->get()->toArray();
+    }
+
+    public function updatedListTab(): void
+    {
+        if ($this->listTab === 'email_logs') {
+            $this->refreshEmailLogs();
+        } else {
+            $this->refreshInvoices();
+        }
+    }
+
+    public function refreshEmailLogs(): void
+    {
+        $this->emailLogs = \App\Models\EmailLog::where('company_id', auth()->user()->company->id)
+            ->with(['invoice'])
+            ->latest()
+            ->get()
+            ->map(fn($log) => [
+                'id' => $log->id,
+                'invoice_number' => $log->invoice?->number ?? 'N/A',
+                'recipient_email' => $log->recipient_email,
+                'status' => $log->status,
+                'error_message' => $log->error_message,
+                'created_at' => $log->created_at->format('d/m/Y H:i'),
+            ])
+            ->toArray();
     }
 
     public function updatedFilterCustomer(): void { $this->refreshInvoices(); }
@@ -142,16 +172,32 @@ new class extends Component
         $this->selectedServiceIds = array_column($this->pendingServices, 'id');
     }
 
+    public function updatedManualAddressId($value): void
+    {
+        if ($value) {
+            $address = auth()->user()->company->customers()
+                ->find($this->selectedCustomerId)
+                ?->addresses()
+                ->find($value);
+
+            if ($address) {
+                $this->manualRate = $address->hourly_rate;
+            }
+        }
+    }
+
     public function openManualModal(): void
     {
         $this->manualServiceTypeId = null;
         $this->manualDescription = '';
         $this->manualHours = 1;
         $this->manualUserIds = [];
+        $this->manualAddressId = null;
         // Try to get the rate from the customer's first address if possible
         $customer = auth()->user()->company->customers()->with('addresses')->find($this->selectedCustomerId);
         if ($customer && $customer->addresses->isNotEmpty()) {
             $this->manualRate = $customer->addresses->first()->hourly_rate;
+            $this->manualAddressId = $customer->addresses->first()->id;
         }
         
         $this->showManualModal = true;
@@ -164,6 +210,7 @@ new class extends Component
             'manualDate' => 'required|date',
             'manualHours' => 'required|numeric|min:0',
             'manualRate' => 'required|numeric|min:0',
+            'manualAddressId' => 'required|exists:service_addresses,id',
         ]);
 
         $description = $this->manualDescription;
@@ -174,6 +221,7 @@ new class extends Component
         $instance = ServiceInstance::create([
             'company_id' => auth()->user()->company->id,
             'customer_id' => $this->selectedCustomerId,
+            'service_address_id' => $this->manualAddressId,
             'service_type_id' => $this->manualServiceTypeId,
             'description' => $description,
             'date' => $this->manualDate,
@@ -276,7 +324,111 @@ new class extends Component
 
     public function sendEmail(): void
     {
-        Flux::toast(variant: 'success', text: __('Invoice sent by email successfully.'));
+        $invoice = auth()->user()->company->invoices()->with(['customer', 'company', 'items'])->findOrFail($this->selectedInvoiceId);
+
+        if (!$invoice->customer->email) {
+            Flux::toast(variant: 'danger', text: __('Customer has no email address.'));
+            return;
+        }
+
+        // Render the PDF view in the background and get binary data
+        $originalLocale = app()->getLocale();
+        app()->setLocale('en'); // Always English on PDFs & Emails
+        
+        try {
+            $pdf = Pdf::loadView('pdf.invoice', [
+                'invoice' => $invoice,
+            ]);
+            $pdfData = $pdf->output();
+
+            $fileName = strtolower($invoice->number).($invoice->status === 'draft' ? '-draft' : '').'.pdf';
+
+            \Illuminate\Support\Facades\Mail::to($invoice->customer->email)
+                ->send(new \App\Mail\InvoiceMail($invoice, $pdfData, $fileName));
+            
+            // If the invoice is in draft, update status to sent
+            if ($invoice->status === 'draft') {
+                $invoice->update(['status' => 'sent']);
+                $this->refreshInvoices();
+            }
+
+            // Log Success
+            \App\Models\EmailLog::create([
+                'company_id' => auth()->user()->company->id,
+                'invoice_id' => $invoice->id,
+                'recipient_email' => $invoice->customer->email,
+                'status' => 'success',
+            ]);
+
+            Flux::toast(variant: 'success', text: __('Invoice sent by email successfully.'));
+        } catch (\Exception $e) {
+            // Log Failure
+            \App\Models\EmailLog::create([
+                'company_id' => auth()->user()->company->id,
+                'invoice_id' => $invoice->id,
+                'recipient_email' => $invoice->customer->email,
+                'status' => 'failed',
+                'error_message' => $e->getMessage(),
+            ]);
+
+            Flux::toast(variant: 'danger', text: __('Failed to send email. Please check your mail settings.'));
+        } finally {
+            app()->setLocale($originalLocale); // Restore original locale
+        }
+
+        $this->refreshEmailLogs();
+    }
+
+    public function resendEmail(int $logId): void
+    {
+        $log = \App\Models\EmailLog::findOrFail($logId);
+        $invoice = auth()->user()->company->invoices()->with(['customer', 'company', 'items'])->findOrFail($log->invoice_id);
+
+        if (!$log->recipient_email) {
+            Flux::toast(variant: 'danger', text: __('No recipient email address.'));
+            return;
+        }
+
+        // Generate the PDF binary content
+        $originalLocale = app()->getLocale();
+        app()->setLocale('en'); // Always English on PDFs & Emails
+
+        try {
+            $pdf = Pdf::loadView('pdf.invoice', [
+                'invoice' => $invoice,
+            ]);
+            $pdfData = $pdf->output();
+
+            $fileName = strtolower($invoice->number).($invoice->status === 'draft' ? '-draft' : '').'.pdf';
+
+            \Illuminate\Support\Facades\Mail::to($log->recipient_email)
+                ->send(new \App\Mail\InvoiceMail($invoice, $pdfData, $fileName));
+            
+            // Create a new success log
+            \App\Models\EmailLog::create([
+                'company_id' => auth()->user()->company->id,
+                'invoice_id' => $invoice->id,
+                'recipient_email' => $log->recipient_email,
+                'status' => 'success',
+            ]);
+
+            Flux::toast(variant: 'success', text: __('Invoice resent by email successfully.'));
+        } catch (\Exception $e) {
+            // Create a new failed log
+            \App\Models\EmailLog::create([
+                'company_id' => auth()->user()->company->id,
+                'invoice_id' => $invoice->id,
+                'recipient_email' => $log->recipient_email,
+                'status' => 'failed',
+                'error_message' => $e->getMessage(),
+            ]);
+
+            Flux::toast(variant: 'danger', text: __('Failed to resend email. Please check your mail settings.'));
+        } finally {
+            app()->setLocale($originalLocale); // Restore original locale
+        }
+
+        $this->refreshEmailLogs();
     }
 
     public function deleteInvoice(int $id): void
@@ -340,6 +492,19 @@ new class extends Component
     }
 
     #[Computed]
+    public function manualAddresses()
+    {
+        if (!$this->selectedCustomerId) {
+            return collect();
+        }
+        return auth()->user()->company->customers()
+            ->find($this->selectedCustomerId)
+            ?->addresses()
+            ->where('is_active', true)
+            ->get() ?? collect();
+    }
+
+    #[Computed]
     public function serviceTypes()
     {
         return auth()->user()->company->serviceTypes()->orderBy('name')->get();
@@ -364,8 +529,19 @@ new class extends Component
             <flux:button wire:click="goToSelectCustomer" variant="primary" icon="plus">{{ __('New Invoice') }}</flux:button>
         </header>
 
-        <!-- Filters panel -->
-        <div class="grid grid-cols-1 sm:grid-cols-5 gap-4 p-4 bg-zinc-50 dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800">
+        <!-- Tabs (Invoices vs Email Logs) -->
+        <div class="flex w-full rounded-lg bg-zinc-100 p-1 dark:bg-zinc-900/80 sm:w-auto self-start">
+            <button type="button" wire:click="$set('listTab', 'invoices')" class="flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-all sm:flex-initial {{ $listTab === 'invoices' ? 'bg-white text-zinc-900 shadow-sm ring-1 ring-zinc-900/5 dark:bg-zinc-800 dark:text-white dark:ring-white/10' : 'text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200' }}">
+                {{ __('Invoices') }}
+            </button>
+            <button type="button" wire:click="$set('listTab', 'email_logs')" class="flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-all sm:flex-initial {{ $listTab === 'email_logs' ? 'bg-white text-zinc-900 shadow-sm ring-1 ring-zinc-900/5 dark:bg-zinc-800 dark:text-white dark:ring-white/10' : 'text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200' }}">
+                {{ __('Email Logs') }}
+            </button>
+        </div>
+
+        @if ($listTab === 'invoices')
+            <!-- Filters panel -->
+            <div class="grid grid-cols-1 sm:grid-cols-5 gap-4 p-4 bg-zinc-50 dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800">
             <flux:field>
                 <flux:label>{{ __('Invoice Number') }}</flux:label>
                 <flux:input wire:model.live.debounce.300ms="filterNumber" placeholder="{{ __('0001...') }}" />
@@ -456,6 +632,58 @@ new class extends Component
                 </div>
             @endif
         </div>
+        @else
+            <!-- Email Logs table -->
+            <div class="bg-white dark:bg-zinc-900 border-y sm:border border-zinc-200 dark:border-zinc-700 sm:rounded-xl overflow-hidden shadow-sm">
+                <flux:table>
+                    <flux:table.columns>
+                        <flux:table.column>{{ __('Invoice Number') }}</flux:table.column>
+                        <flux:table.column>{{ __('Recipient') }}</flux:table.column>
+                        <flux:table.column>{{ __('Date & Time') }}</flux:table.column>
+                        <flux:table.column>{{ __('Status') }}</flux:table.column>
+                        <flux:table.column>{{ __('Details / Errors') }}</flux:table.column>
+                        <flux:table.column class="text-right">{{ __('Actions') }}</flux:table.column>
+                    </flux:table.columns>
+
+                    <flux:table.rows>
+                        @forelse($emailLogs as $log)
+                            <flux:table.row :key="'log-'.$log['id']">
+                                <flux:table.cell class="font-semibold text-zinc-900 dark:text-white">
+                                    {{ $log['invoice_number'] }}
+                                </flux:table.cell>
+                                <flux:table.cell>
+                                    <span class="font-medium">{{ $log['recipient_email'] }}</span>
+                                </flux:table.cell>
+                                <flux:table.cell class="text-zinc-500">
+                                    {{ $log['created_at'] }}
+                                </flux:table.cell>
+                                <flux:table.cell>
+                                    @if ($log['status'] === 'success')
+                                        <flux:badge size="sm" color="emerald" inset="top">{{ __('Success') }}</flux:badge>
+                                    @else
+                                        <flux:badge size="sm" color="red" inset="top">{{ __('Failed') }}</flux:badge>
+                                    @endif
+                                </flux:table.cell>
+                                <flux:table.cell class="max-w-xs truncate text-xs text-zinc-500" title="{{ $log['error_message'] }}">
+                                    {{ $log['error_message'] ?: '-' }}
+                                </flux:table.cell>
+                                <flux:table.cell class="text-right">
+                                    <flux:button wire:click="resendEmail({{ $log['id'] }})" variant="outline" size="xs" icon="paper-airplane">
+                                        {{ __('Resend') }}
+                                    </flux:button>
+                                </flux:table.cell>
+                            </flux:table.row>
+                        @empty
+                            <flux:table.row>
+                                <flux:table.cell colspan="6" class="text-center py-8 text-zinc-400 text-sm">
+                                    {{ __('No email logs recorded yet.') }}
+                                </flux:table.cell>
+                            </flux:table.row>
+                        @endforelse
+                    </flux:table.rows>
+                </flux:table>
+            </div>
+        @endif
     @endif
 
     @if($screen === 'select_customer')
@@ -733,6 +961,16 @@ new class extends Component
                 <flux:field>
                     <flux:label>{{ __('Custom Description (Optional)') }}</flux:label>
                     <flux:input wire:model="manualDescription" placeholder="{{ __('Extra Cleaning, Repairs...') }}" />
+                </flux:field>
+
+                <flux:field>
+                    <flux:label>{{ __('Service Location') }}</flux:label>
+                    <flux:select wire:model.live="manualAddressId" placeholder="{{ __('Select a location...') }}">
+                        @foreach($this->manualAddresses as $addr)
+                            <flux:select.option value="{{ $addr->id }}">{{ $addr->label }} ({{ $addr->address }})</flux:select.option>
+                        @endforeach
+                    </flux:select>
+                    <flux:error name="manualAddressId" />
                 </flux:field>
 
                 <flux:field>

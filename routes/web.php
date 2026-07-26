@@ -22,6 +22,8 @@ Route::get('lang/{locale}', function ($locale) {
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::livewire('dashboard', 'dashboard')->name('dashboard');
+    Route::view('subscription-expired', 'subscription-expired')->name('subscription.expired');
+    Route::livewire('superadmin', 'superadmin')->name('superadmin');
     Route::livewire('customers', 'customer')->name('customers');
     Route::livewire('customers/form/{id?}', 'customer-form')->name('customers.form');
     Route::livewire('customers/{id}/addresses', 'service-addresses')->name('customers.addresses');

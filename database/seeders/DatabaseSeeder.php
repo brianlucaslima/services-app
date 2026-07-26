@@ -19,6 +19,14 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
+        // 0. Create superadmin user
+        User::create([
+            'name' => 'Super Admin',
+            'email' => 'admin@invoease.co.uk',
+            'password' => Hash::make('admin123'),
+            'role' => 'superadmin',
+        ]);
+
         // 1. Create main user
         $user = User::create([
             'name' => 'Brian Lucas',
@@ -31,14 +39,16 @@ class DatabaseSeeder extends Seeder
         // 2. Create Company
         $company = Company::create([
             'user_id' => $user->id,
-            'name' => 'Lucas Cleaning Services',
+            'name' => 'Invoease Services Ltd',
             'email' => 'brianlucas67@gmail.com',
             'phone' => '+44 7123 456789',
             'address' => '123 High Street, London, EC1A 1BB',
-            'payment_name' => 'Lucas Services Ltd',
+            'payment_name' => 'Invoease Services Ltd',
             'payment_account_number' => '12345678',
             'payment_sort_code' => '12-34-56',
-            'default_invoice_message' => 'Thank you for choosing Lucas Cleaning Services. Payment is due within 14 days.',
+            'default_invoice_message' => 'Thank you for choosing Invoease Services. Payment is due within 14 days.',
+            'subscription_status' => 'active',
+            'subscription_ends_at' => now()->addYear(),
         ]);
 
         $user->update(['company_id' => $company->id]);

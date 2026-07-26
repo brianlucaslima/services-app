@@ -51,6 +51,11 @@
                             {{ __('Customers') }}
                         </flux:sidebar.item>
                     @endif
+                    @if(auth()->user()->role === 'superadmin')
+                        <flux:sidebar.item icon="shield-check" :href="route('superadmin')" :current="request()->routeIs('superadmin')" wire:navigate>
+                            {{ __('Superadmin') }}
+                        </flux:sidebar.item>
+                    @endif
                 </flux:sidebar.group>
             </flux:sidebar.nav>
 

@@ -21,6 +21,12 @@ class Company extends Model
         'default_invoice_message',
         'primary_color',
         'invoice_start_number',
+        'subscription_status',
+        'subscription_ends_at',
+    ];
+
+    protected $casts = [
+        'subscription_ends_at' => 'datetime',
     ];
 
     public function user(): BelongsTo

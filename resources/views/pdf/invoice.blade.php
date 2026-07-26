@@ -165,9 +165,8 @@
             @endif
         </div>
         <div class="invoice-number-date">
-            <div class="title">{{ __('INVOICE') }}</div>
+            <div class="title">{{ __('INVOICE') }} {{ $invoice->number }}</div>
             <div style="margin-top: 5px; color: #71717a; font-size: 11px;">
-                <strong>{{ __('Invoice Number') }}:</strong> {{ $invoice->number }}<br>
                 <strong>{{ __('Date') }}:</strong> {{ $invoice->date->format('d/m/Y') }}<br>
             </div>
         </div>
