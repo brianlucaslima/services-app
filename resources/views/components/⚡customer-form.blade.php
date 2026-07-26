@@ -51,13 +51,21 @@ new class extends Component
     public function save(): void
     {
         $validated = $this->validate();
-        $validated['is_active'] = $this->is_active;
+
+        // Run the SaveCustomerWorkflow!
+        \App\Brain\Customers\Workflows\SaveCustomerWorkflow::run([
+            'companyId' => auth()->user()->company->id,
+            'customerId' => $this->customerId,
+            'name' => $this->name,
+            'phone' => $this->phone ?: null,
+            'email' => $this->email ?: null,
+            'address' => $this->address ?: null,
+            'isActive' => (bool) $this->is_active,
+        ]);
 
         if ($this->customerId) {
-            auth()->user()->company->customers()->findOrFail($this->customerId)->update($validated);
             Flux::toast(variant: 'success', text: __('Customer updated successfully.'));
         } else {
-            auth()->user()->company->customers()->create($validated);
             Flux::toast(variant: 'success', text: __('Customer created successfully.'));
         }
 
