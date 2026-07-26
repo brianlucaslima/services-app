@@ -12,7 +12,7 @@ new class extends Component
 {
     public Customer $customer;
     public $addresses = [];
-    
+
     // Form fields for adding/editing address
     public $addressId = null;
     public $label = '';
@@ -24,7 +24,7 @@ new class extends Component
     public $duration_hours = 0;
     public $hourly_rate = 0;
     public string $type = 'house';
-    
+
     // Schedules for the current address being edited
     public $schedules = [];
 
@@ -71,7 +71,7 @@ new class extends Component
         $this->duration_hours = $address->duration_hours;
         $this->hourly_rate = $address->hourly_rate;
         $this->type = $address->type ?? 'house';
-        
+
         foreach ($address->schedules as $schedule) {
             $this->schedules[] = [
                 'id' => $schedule->id,
@@ -85,7 +85,7 @@ new class extends Component
                 'user_ids' => $schedule->users->pluck('id')->toArray(),
             ];
         }
-        
+
         if (empty($this->schedules)) {
             $this->addSchedule();
         }
@@ -214,7 +214,7 @@ new class extends Component
                             <flux:badge size="sm" :color="$addr['type'] === 'house' ? 'zinc' : 'blue'">{{ __($addr['type']) }}</flux:badge>
                         </h3>
                         <p class="text-sm text-zinc-500 dark:text-zinc-400">{{ $addr['address'] }}</p>
-                        
+
                         <div class="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-500">
                             <div class="flex items-center gap-1">
                                 <flux:icon.clock class="w-3.5 h-3.5" />
@@ -276,7 +276,7 @@ new class extends Component
                     <h2 class="font-bold text-zinc-900 dark:text-white">{{ $addressId ? __('Edit Location') : __('New Location') }}</h2>
                     <flux:button wire:click="resetForm" variant="ghost" icon="x-mark" size="sm" />
                 </div>
-                
+
                 <form wire:submit="save" class="p-6 space-y-6 max-h-[80vh] overflow-y-auto">
                     <div class="space-y-4">
                         <div class="grid grid-cols-2 gap-4">
@@ -324,7 +324,7 @@ new class extends Component
                         <div class="grid grid-cols-2 gap-4">
                             <flux:field>
                                 <flux:label>{{ __('Hours Duration') }}</flux:label>
-                                <flux:input type="number" step="0.5" wire:model="duration_hours" required />
+                                <flux:input type="number" step="0.01" wire:model="duration_hours" required />
                             </flux:field>
                             <flux:field>
                                 <flux:label>{{ __('Hourly Rate') }}</flux:label>

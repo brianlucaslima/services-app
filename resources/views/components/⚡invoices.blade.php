@@ -205,14 +205,14 @@ new class extends Component
             $this->manualRate = $customer->addresses->first()->hourly_rate;
             $this->manualAddressId = $customer->addresses->first()->id;
         }
-        
+
         $this->showManualModal = true;
     }
 
     public function openEditServiceModal(int $instanceId): void
     {
         $instance = ServiceInstance::with('users')->findOrFail($instanceId);
-        
+
         $this->editingServiceInstanceId = $instance->id;
         $this->manualServiceTypeId = $instance->service_type_id;
         $this->manualDescription = $instance->description;
@@ -221,7 +221,7 @@ new class extends Component
         $this->manualRate = (float) $instance->hourly_rate;
         $this->manualAddressId = $instance->service_address_id;
         $this->manualUserIds = $instance->users->pluck('id')->toArray();
-        
+
         $this->showManualModal = true;
     }
 
@@ -271,7 +271,7 @@ new class extends Component
                 'duration_hours' => $this->manualHours,
                 'hourly_rate' => $this->manualRate,
             ]);
-            
+
             Flux::toast(variant: 'success', text: __('Service updated successfully.'));
         } else {
             // CREATE mode
@@ -287,7 +287,7 @@ new class extends Component
                 'hourly_rate' => $this->manualRate,
                 'status' => 'completed',
             ]);
-            
+
             Flux::toast(variant: 'success', text: __('Manual service added.'));
         }
 
@@ -1020,7 +1020,7 @@ new class extends Component
                 <div class="grid grid-cols-2 gap-4">
                     <flux:field>
                         <flux:label>{{ __('Hours') }}</flux:label>
-                        <flux:input type="number" step="0.5" wire:model="manualHours" required />
+                        <flux:input type="number" step="0.01" wire:model="manualHours" required />
                     </flux:field>
                     <flux:field>
                         <flux:label>{{ __('Rate') }}</flux:label>
