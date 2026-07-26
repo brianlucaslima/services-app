@@ -41,7 +41,7 @@ class SendInvoiceEmailAction extends Action
 
         // Retrieve all company administrators to add in CC
         $managementEmails = $invoice->company->users()
-            ->where('role', 'management')
+            ->wherePivot('role', 'management')
             ->whereNotNull('email')
             ->pluck('email')
             ->toArray();

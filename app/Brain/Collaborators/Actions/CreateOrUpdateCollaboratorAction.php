@@ -65,7 +65,7 @@ class CreateOrUpdateCollaboratorAction extends Action
         }
 
         if ($this->userId) {
-            $user = User::where('company_id', $this->companyId)->findOrFail($this->userId);
+            $user = User::query()->findOrFail($this->userId);
 
             $userData['email'] = $this->email;
             $user->update($userData);
@@ -84,6 +84,7 @@ class CreateOrUpdateCollaboratorAction extends Action
                 $userData['company_id'] = $this->companyId;
 
                 $user = User::create($userData);
+
             }
         }
 

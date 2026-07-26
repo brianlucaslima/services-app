@@ -34,7 +34,7 @@ class SendUnpaidInvoicesNotification extends Command
 
             if ($unpaidInvoices->isNotEmpty()) {
                 $managers = $company->users()
-                    ->where('role', 'management')
+                    ->wherePivot('role', 'management')
                     ->get();
 
                 if ($managers->isNotEmpty()) {

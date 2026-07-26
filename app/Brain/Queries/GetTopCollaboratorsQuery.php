@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace App\Brain\Queries;
 
+use App\Models\Company;
 use App\Models\ServiceInstance;
-use App\Models\User;
 use Brain\Query;
 
 class GetTopCollaboratorsQuery extends Query
@@ -16,7 +16,8 @@ class GetTopCollaboratorsQuery extends Query
 
     public function handle(): array
     {
-        $collaborators = User::where('company_id', $this->companyId)->get();
+        $company = Company::findOrFail($this->companyId);
+        $collaborators = $company->users()->get();
 
         $completedInstancesThisMonth = ServiceInstance::where('company_id', $this->companyId)
             ->where('status', 'completed')

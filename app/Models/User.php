@@ -67,9 +67,9 @@ class User extends Authenticatable implements PasskeyUser
     protected static function booted()
     {
         static::saving(function ($user) {
-            if (array_key_exists('hourly_rate', $user->attributes)) {
-                $user->tempHourlyRate = (float) $user->attributes['hourly_rate'];
-                unset($user->attributes['hourly_rate']);
+            if (array_key_exists('hourly_rate', $user->getAttributes())) {
+                $user->tempHourlyRate = (float) $user->getAttributes()['hourly_rate'];
+                unset($user['hourly_rate']);
             }
         });
 
@@ -83,12 +83,20 @@ class User extends Authenticatable implements PasskeyUser
                     $user->tempHourlyRate = null;
                 }
 
-                // If role is set on the user model, sync it to the pivot
-                if (array_key_exists('role', $user->attributes)) {
-                    $pivotData['role'] = $user->attributes['role'];
+                // If role was explicitly changed during this save, sync it to the pivot
+                if ($user->isDirty('role')) {
+                    $pivotData['role'] = $user->role;
                 }
 
-                if (! empty($pivotData)) {
+                // If no pivot record exists at all for this company, create one with default role
+                $pivotExists = $user->companies()->where('companies.id', $companyId)->exists();
+                if (! $pivotExists) {
+                    if (! isset($pivotData['role'])) {
+                        $pivotData['role'] = $user->role ?? 'collaborator';
+                    }
+                }
+
+                if (! empty($pivotData) || ! $pivotExists) {
                     $user->companies()->syncWithPivotValues([$companyId], $pivotData, false);
                 }
             }

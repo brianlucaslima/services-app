@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Brain\Queries\GetCollaboratorPayoutsQuery;
 use App\Models\Invoice;
-use App\Models\User;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Support\Carbon;
 
@@ -17,7 +16,7 @@ class PdfController extends Controller
     {
         app()->setLocale('en'); // Garante que o PDF saia sempre em inglês
 
-        $user = User::findOrFail($id);
+        $user = auth()->user()->company->users()->findOrFail($id);
         $startDate = request('start_date');
         $endDate = request('end_date');
         $addressType = request('address_type', 'all');

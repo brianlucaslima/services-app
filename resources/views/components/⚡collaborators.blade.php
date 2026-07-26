@@ -11,7 +11,7 @@ new class extends Component
 {
     public $search = '';
     public $showModal = false;
-    
+
     // Form fields
     public $userId = null;
     public $name = '';
@@ -58,8 +58,8 @@ new class extends Component
         $this->userId = $user->id;
         $this->name = $user->name;
         $this->email = $user->email;
-        $this->role = $user->role;
-        $this->hourly_rate = $user->hourly_rate;
+        $this->role = $user->pivot->role;
+        $this->hourly_rate = $user->pivot->hourly_rate;
         $this->showModal = true;
     }
 
@@ -149,12 +149,12 @@ new class extends Component
                             <span class="block text-xs text-zinc-500">{{ $collab->email }}</span>
                         </flux:table.cell>
                         <flux:table.cell>
-                            <flux:badge :color="$collab->role === 'management' ? 'purple' : 'zinc'" size="sm">
-                                {{ __($collab->role) }}
+                            <flux:badge :color="$collab->pivot->role === 'management' ? 'purple' : 'zinc'" size="sm">
+                                {{ __($collab->pivot->role) }}
                             </flux:badge>
                         </flux:table.cell>
                         <flux:table.cell class="font-medium text-zinc-700 dark:text-zinc-300">
-                            {{ Number::currency($collab->hourly_rate, 'GBP') }}/h
+                            {{ Number::currency($collab->pivot->hourly_rate, 'GBP') }}/h
                         </flux:table.cell>
                         <flux:table.cell>
                             <flux:dropdown align="end">

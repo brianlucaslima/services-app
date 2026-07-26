@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Brain\Queries;
 
+use App\Models\Company;
 use App\Models\ServiceInstance;
 use App\Models\User;
 use Brain\Query;
@@ -27,7 +28,8 @@ class GetCollaboratorPayoutsQuery extends Query
 
         if ($this->userId) {
             // Detailed report for a specific user
-            $user = User::where('company_id', $this->companyId)->findOrFail($this->userId);
+            $company = Company::findOrFail($this->companyId);
+            $user = $company->users()->findOrFail($this->userId);
 
             $query = ServiceInstance::where('company_id', $this->companyId)
                 ->where('status', 'completed')
@@ -64,7 +66,8 @@ class GetCollaboratorPayoutsQuery extends Query
         }
 
         // Overview report of all users
-        $users = User::where('company_id', $this->companyId)->orderBy('name')->get();
+        $company = Company::findOrFail($this->companyId);
+        $users = $company->users()->orderBy('name')->get();
         $reports = [];
 
         foreach ($users as $user) {

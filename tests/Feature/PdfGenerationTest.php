@@ -23,6 +23,7 @@ test('invoice pdf generation forces english locale even if user has pt_BR locale
     ]);
 
     $user->update(['company_id' => $company->id]);
+    $user->refresh();
 
     $customer = Customer::create([
         'company_id' => $company->id,
@@ -78,6 +79,7 @@ test('collaborator report pdf generation forces english locale even if user has 
     ]);
 
     $user->update(['company_id' => $company->id]);
+    $user->refresh();
 
     // 2. Mock Pdf facade to verify the locale is 'en' when view is loaded
     Pdf::shouldReceive('loadView')
@@ -96,6 +98,7 @@ test('collaborator report pdf generation forces english locale even if user has 
 
     // 3. Act as the user and request the PDF
     $this->actingAs($user);
+    $this->withoutExceptionHandling();
 
     $response = $this->get(route('reports.pdf', [
         'id' => $user->id,
@@ -121,6 +124,7 @@ test('sending invoice email triggers mail delivery with pdf attachment and updat
     ]);
 
     $user->update(['company_id' => $company->id]);
+    $user->refresh();
 
     // Create a second manager to test CC behavior
     $manager2 = User::factory()->create([
@@ -148,6 +152,7 @@ test('sending invoice email triggers mail delivery with pdf attachment and updat
 
     // 2. Act as user and test Livewire component
     $this->actingAs($user);
+    $this->withoutExceptionHandling();
 
     Livewire::test('invoices')
         ->set('selectedInvoiceId', $invoice->id)
