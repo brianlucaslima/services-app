@@ -24,7 +24,8 @@ class SendUnpaidInvoicesNotification extends Command
         $companies = Company::all();
 
         foreach ($companies as $company) {
-            $unpaidInvoices = Invoice::where('company_id', $company->id)
+            $unpaidInvoices = Invoice::query()
+                ->where('company_id', $company->id)
                 ->where('status', 'sent')
                 ->where('total_amount', '>', 0)
                 ->with('customer')
