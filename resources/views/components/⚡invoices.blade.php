@@ -251,62 +251,17 @@ new class extends Component
             return;
         }
 
-        $invoice = DB::transaction(function() {
-            $company = auth()->user()->company;
-            $lastNum = $company->invoice_start_number ?? 0;
-            $nextNum = $lastNum + 1;
+        // Run the GenerateInvoiceWorkflow!
+        $payload = \App\Brain\Invoices\Workflows\GenerateInvoiceWorkflow::run([
+            'companyId' => auth()->user()->company->id,
+            'customerId' => $this->selectedCustomerId,
+            'invoiceDate' => $this->invoiceDate,
+            'dueDate' => $this->dueDate,
+            'notes' => $this->notes,
+            'selectedServiceIds' => $this->selectedServiceIds,
+        ]);
 
-            // Safety loop to prevent duplicate invoice numbers
-            do {
-                $number = str_pad($nextNum, 4, '0', STR_PAD_LEFT);
-                $exists = Invoice::where('company_id', $company->id)->where('number', $number)->exists();
-                if ($exists) {
-                    $nextNum++;
-                }
-            } while ($exists);
-
-            // Update the company's last invoice number
-            $company->update(['invoice_start_number' => $nextNum]);
-
-            $invoice = Invoice::create([
-                'company_id' => $company->id,
-                'customer_id' => $this->selectedCustomerId,
-                'number' => $number,
-                'date' => $this->invoiceDate,
-                'due_date' => $this->dueDate,
-                'status' => 'draft',
-                'total_amount' => 0,
-                'notes' => $this->notes,
-            ]);
-
-            $total = 0;
-            $services = ServiceInstance::with('address')->findMany($this->selectedServiceIds);
-            
-            foreach ($services as $service) {
-                $amount = $service->duration_hours * $service->hourly_rate;
-                $total += $amount;
-
-                $itemDescription = $service->description;
-                if ($service->address) {
-                    $itemDescription .= ' - ' . $service->address->label;
-                }
-                $itemDescription .= ' (' . $service->date->format('d/m/Y') . ')';
-
-                InvoiceItem::create([
-                    'invoice_id' => $invoice->id,
-                    'service_instance_id' => $service->id,
-                    'description' => $itemDescription,
-                    'quantity' => $service->duration_hours,
-                    'unit_price' => $service->hourly_rate,
-                    'amount' => $amount,
-                ]);
-            }
-
-            $invoice->update(['total_amount' => $total]);
-            return $invoice;
-        });
-
-        $this->selectedInvoiceId = $invoice->id;
+        $this->selectedInvoiceId = $payload->invoiceId;
         $this->screen = 'detail';
         $this->refreshInvoices();
         Flux::toast(variant: 'success', text: __('Invoice created successfully.'));
