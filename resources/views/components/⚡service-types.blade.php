@@ -40,11 +40,16 @@ new class extends Component
             ]
         ]);
 
+        // Run the SaveServiceTypeWorkflow!
+        \App\Brain\Services\Workflows\SaveServiceTypeWorkflow::run([
+            'companyId' => auth()->user()->company->id,
+            'editingId' => $this->editingId,
+            'name' => $this->name,
+        ]);
+
         if ($this->editingId) {
-            auth()->user()->company->serviceTypes()->findOrFail($this->editingId)->update(['name' => $this->name]);
             Flux::toast(variant: 'success', text: __('Service updated.'));
         } else {
-            auth()->user()->company->serviceTypes()->create(['name' => $this->name]);
             Flux::toast(variant: 'success', text: __('Service created.'));
         }
 
