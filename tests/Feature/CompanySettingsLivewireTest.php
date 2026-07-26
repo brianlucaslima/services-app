@@ -114,3 +114,27 @@ test('saving company settings without uploading a logo preserves the existing lo
     $company = $company->fresh();
     expect($company->logo)->toBe('logos/existing-logo.png');
 });
+
+test('collaborator cannot access company settings', function () {
+    // 1. Setup collaborator and company
+    $owner = User::factory()->create();
+    $company = Company::create([
+        'user_id' => $owner->id,
+        'name' => 'Invoease HQ',
+        'email' => 'hq@invoease.co.uk',
+    ]);
+    $owner->update(['company_id' => $company->id]);
+
+    $collab = User::factory()->create([
+        'company_id' => $company->id,
+        'role' => 'collaborator',
+    ]);
+
+    // 2. Act as collaborator and try to visit route /settings/company
+    $this->actingAs($collab);
+
+    $response = $this->get(route('company.edit'));
+
+    // 3. Assert 403 Forbidden
+    $response->assertStatus(403);
+});

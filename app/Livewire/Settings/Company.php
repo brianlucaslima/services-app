@@ -37,6 +37,10 @@ class Company extends Component
 
     public function mount(): void
     {
+        if (auth()->user()->role !== 'management') {
+            abort(403);
+        }
+
         $this->company = auth()->user()->company;
         $this->name = $this->company->name;
         $this->email = $this->company->email;
