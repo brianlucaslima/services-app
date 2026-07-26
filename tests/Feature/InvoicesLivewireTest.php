@@ -253,3 +253,72 @@ test('check before sending shows confirmation modal if email already sent', func
     // 3. Assert mail was dispatched
     Mail::assertSent(InvoiceMail::class, 1);
 });
+
+test('pending completed services can be edited and deleted inside the invoice screen', function () {
+    // 1. Setup data
+    $user = User::factory()->create([
+        'role' => 'management',
+    ]);
+    $company = Company::create([
+        'user_id' => $user->id,
+        'name' => 'Invoease HQ',
+        'email' => 'hq@invoease.co.uk',
+    ]);
+    $user->update(['company_id' => $company->id]);
+    $user->refresh();
+
+    $customer = Customer::create([
+        'company_id' => $company->id,
+        'name' => 'John Doe',
+        'email' => 'john@example.com',
+    ]);
+
+    $address = ServiceAddress::create([
+        'customer_id' => $customer->id,
+        'label' => 'Main Office',
+        'address' => '123 Business Rd',
+        'is_active' => true,
+        'type' => 'office',
+        'duration_hours' => 2.00,
+        'hourly_rate' => 20.00,
+        'start_date' => now()->format('Y-m-d'),
+    ]);
+
+    $instance = ServiceInstance::create([
+        'company_id' => $company->id,
+        'customer_id' => $customer->id,
+        'service_address_id' => $address->id,
+        'description' => 'Draft Office Cleaning',
+        'date' => now()->format('Y-m-d'),
+        'time' => '10:00:00',
+        'duration_hours' => 2.00,
+        'hourly_rate' => 20.00,
+        'status' => 'completed',
+    ]);
+
+    // 2. Act as user and test Livewire edit & delete
+    $this->actingAs($user);
+
+    // Edit pending service
+    Livewire::test('invoices')
+        ->set('selectedCustomerId', $customer->id)
+        ->call('openEditServiceModal', $instance->id)
+        ->assertSet('editingServiceInstanceId', $instance->id)
+        ->assertSet('manualDescription', 'Draft Office Cleaning')
+        ->set('manualDescription', 'Updated Office Cleaning')
+        ->set('manualHours', 4.00)
+        ->call('saveManualService')
+        ->assertHasNoErrors();
+
+    $instance = $instance->fresh();
+    expect($instance->description)->toBe('Updated Office Cleaning')
+        ->and((float) $instance->duration_hours)->toBe(4.00);
+
+    // Delete pending service
+    Livewire::test('invoices')
+        ->set('selectedCustomerId', $customer->id)
+        ->call('deleteServiceInstance', $instance->id)
+        ->assertHasNoErrors();
+
+    expect(ServiceInstance::find($instance->id))->toBeNull();
+});

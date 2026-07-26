@@ -75,13 +75,13 @@ new class extends Component
         $this->selectedScheduleId = $scheduleId;
         $this->selectedOriginalDate = $date;
         $this->notes = '';
-        
+
         // Find existing instance to load notes if any
         $instance = ServiceInstance::where('company_id', auth()->user()->company->id)
             ->where('service_schedule_id', $scheduleId)
             ->where('original_date', $date)
             ->first();
-            
+
         if ($instance) {
             $this->notes = $instance->notes ?? '';
         }
@@ -92,7 +92,7 @@ new class extends Component
     public function skipOccurrence(int $scheduleId, string $date): void
     {
         $schedule = ServiceSchedule::with('address')->findOrFail($scheduleId);
-        
+
         $inst = ServiceInstance::updateOrCreate(
             ['service_schedule_id' => $scheduleId, 'original_date' => $date],
             [
@@ -152,7 +152,7 @@ new class extends Component
         $start = Carbon::parse($this->viewDate)->startOfWeek();
         $end = $start->copy()->endOfWeek();
         $period = CarbonPeriod::create($start, $end);
-        
+
         $companyId = auth()->user()->company->id;
         $schedules = ServiceSchedule::whereHas('address.customer', fn($q) => $q->where('company_id', $companyId))
             ->with(['address.customer', 'users'])
@@ -178,7 +178,7 @@ new class extends Component
         foreach ($period as $date) {
             $dateStr = $date->format('Y-m-d');
             $dayServices = [];
-            
+
             // 1. Virtual occurrences from recurrence
             foreach ($schedules as $schedule) {
                 if ($this->isScheduledForDate($schedule, $date)) {
@@ -186,12 +186,12 @@ new class extends Component
                     $override = $instances->where('service_schedule_id', $schedule->id)
                                          ->filter(fn($inst) => $inst->original_date->isSameDay($date))
                                          ->first();
-                    
+
                     if (!$override) {
                         $assignedUsers = $schedule->users;
                         $assignedCount = $assignedUsers->count() ?: 1;
                         $duration = $schedule->address->duration_hours;
-                        
+
                         if (auth()->user()->role !== 'management') {
                             $totalValue = auth()->user()->hourly_rate * ($duration / $assignedCount);
                         } else {
@@ -221,7 +221,7 @@ new class extends Component
                         $assignedUsers = $override->users;
                         $assignedCount = $assignedUsers->count() ?: 1;
                         $duration = $schedule->address->duration_hours;
-                        
+
                         if (auth()->user()->role !== 'management') {
                             $totalValue = auth()->user()->hourly_rate * ($duration / $assignedCount);
                         } else {
@@ -257,12 +257,12 @@ new class extends Component
                 if ($instance->status !== 'skipped' && $instance->date->isSameDay($date)) {
                     // Check if it was originally NOT on this date (only for scheduled instances)
                     $isOriginal = $instance->schedule ? $this->isScheduledForDate($instance->schedule, $date) : false;
-                    
+
                     if (!$isOriginal) {
                         $assignedUsers = $instance->users;
                         $assignedCount = $assignedUsers->count() ?: 1;
                         $duration = $instance->duration_hours;
-                        
+
                         if (auth()->user()->role !== 'management') {
                             $totalValue = auth()->user()->hourly_rate * ($duration / $assignedCount);
                         } else {
@@ -291,7 +291,7 @@ new class extends Component
                     }
                 }
             }
-            
+
             usort($dayServices, fn($a, $b) => $a['time'] <=> $b['time']);
 
             $days[] = [
@@ -346,10 +346,10 @@ new class extends Component
         switch ($schedule->recurrence_type) {
             case 'once':
                 return $date->isSameDay($startDate);
-            
+
             case 'weekly':
                 return in_array($date->dayOfWeek, $schedule->days_of_week ?? []);
-            
+
             case 'fortnightly':
                 if (!in_array($date->dayOfWeek, $schedule->days_of_week ?? [])) {
                     return false;
@@ -357,7 +357,7 @@ new class extends Component
                 // Calculate weeks difference from the week of start_date
                 $weeksDiff = $startDate->copy()->startOfWeek()->diffInWeeks($date->copy()->startOfWeek());
                 return $weeksDiff % 2 === 0;
-            
+
             case 'monthly':
                 return $date->day === $schedule->day_of_month;
         }
@@ -410,7 +410,7 @@ new class extends Component
                     <p class="text-xs font-bold uppercase tracking-wider">{{ $day['date']->translatedFormat('D') }}</p>
                     <p class="text-lg font-semibold">{{ $day['date']->format('d') }}</p>
                 </div>
-                
+
                 <div class="flex-1 p-2 space-y-2">
                     @forelse($day['services'] as $service)
                         <div class="group relative p-2 rounded-lg {{ $service['is_override'] ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800' : 'bg-zinc-50 dark:bg-zinc-800 border-zinc-100 dark:border-zinc-700' }} border text-xs">
@@ -418,7 +418,7 @@ new class extends Component
                                 <p class="font-bold text-zinc-900 dark:text-white truncate pr-4 {{ $service['status'] === 'completed' ? 'line-through opacity-50' : '' }}" title="{{ $service['customer_name'] }}">
                                     {{ $service['customer_name'] }}
                                 </p>
-                                
+
                                 <div class="flex items-center gap-1 -mr-1">
                                     @if($service['status'] === 'completed')
                                         <flux:icon.check-circle class="w-4 h-4 text-emerald-500" variant="solid" />
@@ -440,13 +440,13 @@ new class extends Component
                                     @endif
                                 </div>
                             </div>
-                            
+
                             @if($service['description'])
                                 <p class="text-[10px] font-medium text-zinc-600 dark:text-zinc-300 truncate">
                                     {{ $service['description'] }}
                                 </p>
                             @endif
-                            
+
                             <p class="text-zinc-500 dark:text-zinc-400 truncate text-[10px]">
                                 {{ $service['address_label'] }}
                             </p>
@@ -461,7 +461,7 @@ new class extends Component
                                     <span>{{ Number::currency($service['total_value'], 'GBP') }}</span>
                                 </div>
                             </div>
-                            
+
                             @if(isset($service['rescheduled_from']))
                                 <p class="text-[9px] text-amber-600 dark:text-amber-400 mt-0.5">
                                     {{ __('Rescheduled from') }} {{ $service['rescheduled_from'] }}
@@ -478,7 +478,7 @@ new class extends Component
                             @if(!empty($service['assigned_users']))
                                 <div class="mt-2 flex -space-x-1 overflow-hidden">
                                     @foreach($service['assigned_users'] as $u)
-                                        <div class="inline-block h-5 w-5 rounded-full ring-2 ring-white dark:ring-zinc-900 bg-zinc-100 dark:bg-zinc-700 text-[8px] font-bold flex items-center justify-center text-zinc-600 dark:text-zinc-300" title="{{ $u['name'] }}">
+                                        <div class="flex justify-center itens-center h-5 w-5 rounded-full ring-2 ring-white dark:ring-zinc-900 bg-zinc-100 dark:bg-zinc-700 text-[8px] font-bold flex items-center justify-center text-zinc-600 dark:text-zinc-300" title="{{ $u['name'] }}">
                                             {{ $u['initials'] }}
                                         </div>
                                     @endforeach
@@ -514,7 +514,7 @@ new class extends Component
                         <flux:label>{{ __('Date') }}</flux:label>
                         <flux:input type="date" wire:model="newDate" />
                     </flux:field>
-                    
+
                     <flux:field>
                         <flux:label>{{ __('Time') }}</flux:label>
                         <flux:input type="time" wire:model="newTime" />

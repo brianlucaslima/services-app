@@ -355,5 +355,10 @@
     "Are you sure you want to send it again?": "Are you sure you want to send it again?",
     "Send Again": "Send Again",
     "Email History": "Email History",
-    "No email has been sent for this invoice yet.": "No email has been sent for this invoice yet."
+    "No email has been sent for this invoice yet.": "No email has been sent for this invoice yet.",
+    "Please select a service type or enter a custom description.": "Please select a service type or enter a custom description.",
+    "Edit Service": "Edit Service",
+    "Modify the service details and assigned team.": "Modify the service details and assigned team.",
+    "Service deleted successfully.": "Service deleted successfully.",
+    "Service updated successfully.": "Service updated successfully."
 }

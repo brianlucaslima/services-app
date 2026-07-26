@@ -49,6 +49,7 @@ new class extends Component
     public $manualRate = 0;
     public array $manualUserIds = [];
     public $manualAddressId = null;
+    public ?int $editingServiceInstanceId = null;
 
     public function mount(): void
     {
@@ -172,7 +173,7 @@ new class extends Component
                 'total' => $item->duration_hours * $item->hourly_rate,
             ])
             ->toArray();
-            
+
         $this->selectedServiceIds = array_column($this->pendingServices, 'id');
     }
 
@@ -197,6 +198,7 @@ new class extends Component
         $this->manualHours = 1;
         $this->manualUserIds = [];
         $this->manualAddressId = null;
+        $this->editingServiceInstanceId = null;
         // Try to get the rate from the customer's first address if possible
         $customer = auth()->user()->company->customers()->with('addresses')->find($this->selectedCustomerId);
         if ($customer && $customer->addresses->isNotEmpty()) {
@@ -207,41 +209,97 @@ new class extends Component
         $this->showManualModal = true;
     }
 
+    public function openEditServiceModal(int $instanceId): void
+    {
+        $instance = ServiceInstance::with('users')->findOrFail($instanceId);
+        
+        $this->editingServiceInstanceId = $instance->id;
+        $this->manualServiceTypeId = $instance->service_type_id;
+        $this->manualDescription = $instance->description;
+        $this->manualDate = $instance->date->format('Y-m-d');
+        $this->manualHours = (float) $instance->duration_hours;
+        $this->manualRate = (float) $instance->hourly_rate;
+        $this->manualAddressId = $instance->service_address_id;
+        $this->manualUserIds = $instance->users->pluck('id')->toArray();
+        
+        $this->showManualModal = true;
+    }
+
+    public function deleteServiceInstance(int $id): void
+    {
+        $instance = ServiceInstance::where('company_id', auth()->user()->company->id)->findOrFail($id);
+        $instance->delete();
+
+        // Remove from selected list if it was selected
+        $this->selectedServiceIds = array_diff($this->selectedServiceIds, [$id]);
+
+        $this->loadPendingServices();
+        Flux::toast(variant: 'success', text: __('Service deleted successfully.'));
+    }
+
     public function saveManualService(): void
     {
         $this->validate([
-            'manualServiceTypeId' => 'required_without:manualDescription',
             'manualDate' => 'required|date',
             'manualHours' => 'required|numeric|min:0',
             'manualRate' => 'required|numeric|min:0',
             'manualAddressId' => 'required|exists:service_addresses,id',
         ]);
 
-        $description = $this->manualDescription;
-        if (empty($description) && $this->manualServiceTypeId) {
-            $description = auth()->user()->company->serviceTypes()->findOrFail($this->manualServiceTypeId)->name;
+        $description = trim($this->manualDescription ?? '');
+
+        if (!$this->manualServiceTypeId && $description === '') {
+            $this->addError('manualServiceTypeId', __('Please select a service type or enter a custom description.'));
+            return;
         }
 
-        $instance = ServiceInstance::create([
-            'company_id' => auth()->user()->company->id,
-            'customer_id' => $this->selectedCustomerId,
-            'service_address_id' => $this->manualAddressId,
-            'service_type_id' => $this->manualServiceTypeId,
-            'description' => $description,
-            'date' => $this->manualDate,
-            'time' => '12:00',
-            'duration_hours' => $this->manualHours,
-            'hourly_rate' => $this->manualRate,
-            'status' => 'completed',
-        ]);
+        if ($description === '' && $this->manualServiceTypeId) {
+            $serviceType = auth()->user()->company->serviceTypes()->find($this->manualServiceTypeId);
+            if ($serviceType) {
+                $description = $serviceType->name;
+            }
+        }
+
+        if ($this->editingServiceInstanceId) {
+            // EDIT mode
+            $instance = ServiceInstance::findOrFail($this->editingServiceInstanceId);
+            $instance->update([
+                'service_address_id' => $this->manualAddressId,
+                'service_type_id' => $this->manualServiceTypeId ?: null,
+                'description' => $description,
+                'date' => $this->manualDate,
+                'duration_hours' => $this->manualHours,
+                'hourly_rate' => $this->manualRate,
+            ]);
+            
+            Flux::toast(variant: 'success', text: __('Service updated successfully.'));
+        } else {
+            // CREATE mode
+            $instance = ServiceInstance::create([
+                'company_id' => auth()->user()->company->id,
+                'customer_id' => $this->selectedCustomerId,
+                'service_address_id' => $this->manualAddressId,
+                'service_type_id' => $this->manualServiceTypeId ?: null,
+                'description' => $description,
+                'date' => $this->manualDate,
+                'time' => '12:00',
+                'duration_hours' => $this->manualHours,
+                'hourly_rate' => $this->manualRate,
+                'status' => 'completed',
+            ]);
+            
+            Flux::toast(variant: 'success', text: __('Manual service added.'));
+        }
 
         if (!empty($this->manualUserIds)) {
             $instance->users()->sync($this->manualUserIds);
+        } else {
+            $instance->users()->detach();
         }
 
         $this->showManualModal = false;
+        $this->editingServiceInstanceId = null;
         $this->loadPendingServices();
-        Flux::toast(variant: 'success', text: __('Manual service added.'));
     }
 
     public function generateInvoice(): void
@@ -284,7 +342,7 @@ new class extends Component
     public function checkBeforeSendEmail(): void
     {
         $invoice = auth()->user()->company->invoices()->findOrFail($this->selectedInvoiceId);
-        
+
         $this->selectedInvoiceSentCount = \App\Models\EmailLog::where('invoice_id', $invoice->id)
             ->where('status', 'success')
             ->count();
@@ -676,6 +734,7 @@ new class extends Component
                             </th>
                             <th class="px-4 py-3">{{ __('Description') }}</th>
                             <th class="px-4 py-3 text-right">{{ __('Amount') }}</th>
+                            <th class="px-4 py-3 w-20"></th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-zinc-100 dark:divide-zinc-800">
@@ -691,10 +750,16 @@ new class extends Component
                                 <td class="px-4 py-4 text-right font-semibold text-zinc-900 dark:text-white">
                                     {{ Number::currency($service['total'], 'GBP') }}
                                 </td>
+                                <td class="px-4 py-4 text-right">
+                                    <div class="flex items-center justify-end gap-1.5">
+                                        <flux:button wire:click="openEditServiceModal({{ $service['id'] }})" variant="ghost" size="xs" icon="pencil" title="{{ __('Edit') }}" />
+                                        <flux:button wire:click="deleteServiceInstance({{ $service['id'] }})" variant="ghost" size="xs" icon="trash" variant="danger" title="{{ __('Delete') }}" />
+                                    </div>
+                                </td>
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="3" class="px-4 py-12 text-center text-zinc-400 italic">
+                                <td colspan="4" class="px-4 py-12 text-center text-zinc-400 italic">
                                     <flux:icon.document-magnifying-glass class="w-10 h-10 mx-auto mb-2 opacity-20" />
                                     <p>{{ __('No pending services found for this customer.') }}</p>
                                 </td>
@@ -719,7 +784,7 @@ new class extends Component
                                     {{ Number::currency(collect($pendingServices)->whereIn('id', $selectedServiceIds)->sum('total'), 'GBP') }}
                                 </p>
                             </div>
-                            
+
                             <div class="flex items-center gap-3 w-full sm:w-auto">
                                 <div class="grid grid-cols-2 gap-3 w-full">
                                     <flux:field>
@@ -861,7 +926,7 @@ new class extends Component
                         <!-- Specific Invoice Email Logs -->
                         <div class="space-y-3">
                             <h4 class="text-xs font-bold text-zinc-900 dark:text-white uppercase tracking-wider">{{ __('Email History') }}</h4>
-                            
+
                             @php
                                 $specificLogs = collect($this->emailLogs)->where('invoice_number', $inv->number);
                             @endphp
@@ -907,18 +972,20 @@ new class extends Component
     <flux:modal wire:model="showManualModal" class="md:w-96">
         <form wire:submit="saveManualService" class="space-y-6">
             <div>
-                <flux:heading size="lg">{{ __('Add Manual Service') }}</flux:heading>
-                <flux:subheading>{{ __('One-off work not linked to a schedule.') }}</flux:subheading>
+                <flux:heading size="lg">{{ $editingServiceInstanceId ? __('Edit Service') : __('Add Manual Service') }}</flux:heading>
+                <flux:subheading>{{ $editingServiceInstanceId ? __('Modify the service details and assigned team.') : __('One-off work not linked to a schedule.') }}</flux:subheading>
             </div>
 
             <div class="space-y-4">
                 <flux:field>
                     <flux:label>{{ __('Service Type') }}</flux:label>
                     <flux:select wire:model="manualServiceTypeId" placeholder="{{ __('Select a service type...') }}">
+                        <flux:select.option value="">{{ __('Select a service type...') }}</flux:select.option>
                         @foreach($this->serviceTypes as $type)
                             <flux:select.option value="{{ $type->id }}">{{ $type->name }}</flux:select.option>
                         @endforeach
                     </flux:select>
+                    <flux:error name="manualServiceTypeId" />
                 </flux:field>
 
                 <flux:field>

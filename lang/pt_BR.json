@@ -355,5 +355,10 @@
     "Are you sure you want to send it again?": "Tem certeza de que deseja enviar novamente?",
     "Send Again": "Enviar Novamente",
     "Email History": "Histórico de Envios",
-    "No email has been sent for this invoice yet.": "Nenhum e-mail foi enviado para esta fatura ainda."
+    "No email has been sent for this invoice yet.": "Nenhum e-mail foi enviado para esta fatura ainda.",
+    "Please select a service type or enter a custom description.": "Por favor, selecione um tipo de serviço ou insira uma descrição personalizada.",
+    "Edit Service": "Editar Serviço",
+    "Modify the service details and assigned team.": "Modifique os detalhes do serviço e a equipe designada.",
+    "Service deleted successfully.": "Serviço excluído com sucesso.",
+    "Service updated successfully.": "Serviço atualizado com sucesso."
 }
