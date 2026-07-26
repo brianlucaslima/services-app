@@ -65,41 +65,20 @@ new class extends Component
 
     public function save(): void
     {
-        $rules = [
-            'name' => 'required|string|max:255',
-            'email' => [
-                'required', 'email', 'max:255',
-                Rule::unique('users', 'email')->ignore($this->userId)
-            ],
-            'role' => 'required|in:management,collaborator',
-            'hourly_rate' => 'required|numeric|min:0',
-        ];
-
-        if (!$this->userId) {
-            $rules['password'] = 'required|string|min:6';
-        } else {
-            $rules['password'] = 'nullable|string|min:6';
-        }
-
-        $this->validate($rules);
-
-        $data = [
+        // Run the SaveCollaboratorWorkflow!
+        \App\Brain\Collaborators\Workflows\SaveCollaboratorWorkflow::run([
+            'companyId' => auth()->user()->company->id,
+            'userId' => $this->userId,
             'name' => $this->name,
             'email' => $this->email,
+            'password' => $this->password ?: null,
             'role' => $this->role,
-            'hourly_rate' => $this->hourly_rate,
-        ];
-
-        if ($this->password) {
-            $data['password'] = Hash::make($this->password);
-        }
+            'hourlyRate' => $this->hourly_rate,
+        ]);
 
         if ($this->userId) {
-            $user = auth()->user()->company->users()->findOrFail($this->userId);
-            $user->update($data);
             Flux::toast(variant: 'success', text: __('Collaborator updated successfully.'));
         } else {
-            auth()->user()->company->users()->create($data);
             Flux::toast(variant: 'success', text: __('Collaborator registered successfully.'));
         }
 
