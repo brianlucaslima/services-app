@@ -424,7 +424,7 @@ new class extends Component
                                         <flux:icon.check-circle class="w-4 h-4 text-emerald-500" variant="solid" />
                                     @endif
 
-                                    @if(auth()->user()->role === 'management')
+                                    @if(auth()->user()->role === 'management' && $service['id'] !== null)
                                         <flux:dropdown align="end">
                                             <flux:button variant="ghost" size="xs" icon="ellipsis-vertical" class="h-4 w-4" />
                                             <flux:menu>
