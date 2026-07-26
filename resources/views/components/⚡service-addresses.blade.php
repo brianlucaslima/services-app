@@ -145,39 +145,21 @@ new class extends Component
             'schedules.*.start_time' => 'required',
         ]);
 
-        $address = $this->customer->addresses()->updateOrCreate(
-            ['id' => $this->addressId],
-            [
-                'label' => $this->label,
-                'address' => $this->address,
-                'city' => $this->city,
-                'zip_code' => $this->zip_code,
-                'start_date' => $this->start_date,
-                'end_date' => $this->end_date ?: null,
-                'duration_hours' => $this->duration_hours,
-                'hourly_rate' => $this->hourly_rate,
-                'type' => $this->type,
-            ]
-        );
-
-        $scheduleIds = [];
-        foreach ($this->schedules as $scheduleData) {
-            $schedule = $address->schedules()->updateOrCreate(
-                ['id' => $scheduleData['id']],
-                [
-                    'service_type_id' => $scheduleData['service_type_id'],
-                    'description' => $scheduleData['description'],
-                    'recurrence_type' => $scheduleData['recurrence_type'],
-                    'days_of_week' => $scheduleData['days_of_week'],
-                    'day_of_month' => $scheduleData['day_of_month'],
-                    'start_date' => $scheduleData['start_date'],
-                    'start_time' => $scheduleData['start_time'],
-                ]
-            );
-            $schedule->users()->sync($scheduleData['user_ids'] ?? []);
-            $scheduleIds[] = $schedule->id;
-        }
-        $address->schedules()->whereNotIn('id', $scheduleIds)->delete();
+        // Run the SaveServiceAddressWorkflow!
+        \App\Brain\Customers\Workflows\SaveServiceAddressWorkflow::run([
+            'customerId' => $this->customer->id,
+            'addressId' => $this->addressId,
+            'label' => $this->label,
+            'address' => $this->address,
+            'city' => $this->city,
+            'zipCode' => $this->zip_code,
+            'startDate' => $this->start_date,
+            'endDate' => $this->end_date,
+            'durationHours' => $this->duration_hours,
+            'hourlyRate' => $this->hourly_rate,
+            'type' => $this->type,
+            'schedules' => $this->schedules,
+        ]);
 
         Flux::toast(variant: 'success', text: __('Address saved successfully.'));
         $this->resetForm();
