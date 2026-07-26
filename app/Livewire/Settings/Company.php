@@ -74,6 +74,8 @@ class Company extends Component
 
         $this->company->update($validated);
 
+        $this->reset('logo');
+
         Flux::toast(variant: 'success', text: __('Company details updated.'));
     }
 
