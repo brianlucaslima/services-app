@@ -349,5 +349,11 @@
     "Success": "Sucesso",
     "Failed": "Falha",
     "Resend": "Reenviar",
-    "No email logs recorded yet.": "Nenhum registro de envio de e-mail encontrado."
+    "No email logs recorded yet.": "Nenhum registro de envio de e-mail encontrado.",
+    "Resend Invoice Email?": "Reenviar E-mail da Fatura?",
+    "This invoice email has already been sent :count times to the customer.": "Este e-mail de fatura já foi enviado :count vezes para o cliente.",
+    "Are you sure you want to send it again?": "Tem certeza de que deseja enviar novamente?",
+    "Send Again": "Enviar Novamente",
+    "Email History": "Histórico de Envios",
+    "No email has been sent for this invoice yet.": "Nenhum e-mail foi enviado para esta fatura ainda."
 }

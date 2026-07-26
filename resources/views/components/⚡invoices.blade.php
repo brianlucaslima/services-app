@@ -16,6 +16,10 @@ new class extends Component
     public array $emailLogs = [];
     public string $listTab = 'invoices';
 
+    // Send confirmation state
+    public bool $showSendConfirmationModal = false;
+    public int $selectedInvoiceSentCount = 0;
+
     // Screens: 'list', 'select_customer', 'select_services', 'detail'
     public string $screen = 'list';
     public ?int $selectedInvoiceId = null;
@@ -322,6 +326,27 @@ new class extends Component
         Flux::toast(variant: 'success', text: __('Invoice issued successfully.'));
     }
 
+    public function checkBeforeSendEmail(): void
+    {
+        $invoice = auth()->user()->company->invoices()->findOrFail($this->selectedInvoiceId);
+        
+        $this->selectedInvoiceSentCount = \App\Models\EmailLog::where('invoice_id', $invoice->id)
+            ->where('status', 'success')
+            ->count();
+
+        if ($this->selectedInvoiceSentCount > 0) {
+            $this->showSendConfirmationModal = true;
+        } else {
+            $this->sendEmail();
+        }
+    }
+
+    public function confirmSendEmail(): void
+    {
+        $this->showSendConfirmationModal = false;
+        $this->sendEmail();
+    }
+
     public function sendEmail(): void
     {
         $invoice = auth()->user()->company->invoices()->with(['customer', 'company', 'items'])->findOrFail($this->selectedInvoiceId);
@@ -343,8 +368,20 @@ new class extends Component
 
             $fileName = strtolower($invoice->number).($invoice->status === 'draft' ? '-draft' : '').'.pdf';
 
-            \Illuminate\Support\Facades\Mail::to($invoice->customer->email)
-                ->send(new \App\Mail\InvoiceMail($invoice, $pdfData, $fileName));
+            // Retrieve all company administrators to add in CC
+            $managementEmails = $invoice->company->users()
+                ->where('role', 'management')
+                ->whereNotNull('email')
+                ->pluck('email')
+                ->toArray();
+
+            $mail = \Illuminate\Support\Facades\Mail::to($invoice->customer->email);
+
+            if (!empty($managementEmails)) {
+                $mail->cc($managementEmails);
+            }
+
+            $mail->send(new \App\Mail\InvoiceMail($invoice, $pdfData, $fileName));
             
             // If the invoice is in draft, update status to sent
             if ($invoice->status === 'draft') {
@@ -401,8 +438,20 @@ new class extends Component
 
             $fileName = strtolower($invoice->number).($invoice->status === 'draft' ? '-draft' : '').'.pdf';
 
-            \Illuminate\Support\Facades\Mail::to($log->recipient_email)
-                ->send(new \App\Mail\InvoiceMail($invoice, $pdfData, $fileName));
+            // Retrieve all company administrators to add in CC
+            $managementEmails = $invoice->company->users()
+                ->where('role', 'management')
+                ->whereNotNull('email')
+                ->pluck('email')
+                ->toArray();
+
+            $mail = \Illuminate\Support\Facades\Mail::to($log->recipient_email);
+
+            if (!empty($managementEmails)) {
+                $mail->cc($managementEmails);
+            }
+
+            $mail->send(new \App\Mail\InvoiceMail($invoice, $pdfData, $fileName));
             
             // Create a new success log
             \App\Models\EmailLog::create([
@@ -835,7 +884,7 @@ new class extends Component
                     @if($inv->status === 'draft')
                         <flux:button wire:click="issueInvoice" variant="primary" icon="check">{{ __('Issue Invoice') }}</flux:button>
                     @else
-                        <flux:button wire:click="sendEmail" variant="outline" icon="paper-airplane">{{ __('Send by Email') }}</flux:button>
+                        <flux:button wire:click="checkBeforeSendEmail" variant="outline" icon="paper-airplane">{{ __('Send by Email') }}</flux:button>
                     @endif
 
                     @if($inv->status === 'sent')
@@ -934,6 +983,48 @@ new class extends Component
                                 </div>
                             @endif
                         </div>
+
+                        <flux:separator />
+
+                        <!-- Specific Invoice Email Logs -->
+                        <div class="space-y-3">
+                            <h4 class="text-xs font-bold text-zinc-900 dark:text-white uppercase tracking-wider">{{ __('Email History') }}</h4>
+                            
+                            @php
+                                $specificLogs = collect($this->emailLogs)->where('invoice_number', $inv->number);
+                            @endphp
+
+                            <div class="divide-y divide-zinc-100 dark:divide-zinc-800/50">
+                                @forelse($specificLogs as $log)
+                                    <div class="py-2.5 first:pt-0 last:pb-0 flex items-center justify-between text-xs gap-3">
+                                        <div class="min-w-0 flex-1">
+                                            <span class="block font-medium text-zinc-800 dark:text-zinc-200 truncate" title="{{ $log['recipient_email'] }}">
+                                                {{ $log['recipient_email'] }}
+                                            </span>
+                                            <span class="block text-[10px] text-zinc-400 mt-0.5">
+                                                {{ $log['created_at'] }}
+                                            </span>
+                                            @if($log['error_message'])
+                                                <span class="block text-[9px] text-red-500 mt-0.5 max-w-[150px] truncate" title="{{ $log['error_message'] }}">
+                                                    {{ $log['error_message'] }}
+                                                </span>
+                                            @endif
+                                        </div>
+                                        <div class="flex-shrink-0">
+                                            @if ($log['status'] === 'success')
+                                                <flux:badge size="sm" color="emerald" class="text-[10px]">{{ __('Success') }}</flux:badge>
+                                            @else
+                                                <flux:badge size="sm" color="red" class="text-[10px]">{{ __('Failed') }}</flux:badge>
+                                            @endif
+                                        </div>
+                                    </div>
+                                @empty
+                                    <p class="text-[11px] text-zinc-400 italic py-1">
+                                        {{ __('No email has been sent for this invoice yet.') }}
+                                    </p>
+                                @endforelse
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1005,5 +1096,24 @@ new class extends Component
                 <flux:button type="submit" variant="primary">{{ __('Add to List') }}</flux:button>
             </div>
         </form>
+    </flux:modal>
+
+    <!-- Send Email Confirmation Modal -->
+    <flux:modal wire:model="showSendConfirmationModal" class="md:w-96">
+        <div class="space-y-6">
+            <div>
+                <flux:heading size="lg">{{ __('Resend Invoice Email?') }}</flux:heading>
+                <flux:subheading class="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
+                    {{ __('This invoice email has already been sent :count times to the customer.', ['count' => $selectedInvoiceSentCount]) }}
+                    <span class="block mt-2 font-medium text-zinc-700 dark:text-zinc-300">{{ __('Are you sure you want to send it again?') }}</span>
+                </flux:subheading>
+            </div>
+
+            <div class="flex gap-2">
+                <flux:spacer />
+                <flux:button wire:click="$set('showSendConfirmationModal', false)" variant="ghost">{{ __('Cancel') }}</flux:button>
+                <flux:button wire:click="confirmSendEmail" variant="primary">{{ __('Send Again') }}</flux:button>
+            </div>
+        </div>
     </flux:modal>
 </div>

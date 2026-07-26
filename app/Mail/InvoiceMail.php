@@ -5,6 +5,7 @@ namespace App\Mail;
 use App\Models\Invoice;
 use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
+use Illuminate\Mail\Mailables\Address;
 use Illuminate\Mail\Mailables\Attachment;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
@@ -28,6 +29,10 @@ class InvoiceMail extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
+            from: new Address(
+                config('mail.from.address', 'hello@invoease.co.uk'),
+                config('app.name', 'Invoease').' - '.$this->invoice->company->name
+            ),
             subject: __('Invoice :number from :company', [
                 'number' => $this->invoice->number,
                 'company' => $this->invoice->company->name,

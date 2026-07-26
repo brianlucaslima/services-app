@@ -349,5 +349,11 @@
     "Success": "Success",
     "Failed": "Failed",
     "Resend": "Resend",
-    "No email logs recorded yet.": "No email logs recorded yet."
+    "No email logs recorded yet.": "No email logs recorded yet.",
+    "Resend Invoice Email?": "Resend Invoice Email?",
+    "This invoice email has already been sent :count times to the customer.": "This invoice email has already been sent :count times to the customer.",
+    "Are you sure you want to send it again?": "Are you sure you want to send it again?",
+    "Send Again": "Send Again",
+    "Email History": "Email History",
+    "No email has been sent for this invoice yet.": "No email has been sent for this invoice yet."
 }

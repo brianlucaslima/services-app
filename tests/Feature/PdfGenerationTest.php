@@ -122,6 +122,13 @@ test('sending invoice email triggers mail delivery with pdf attachment and updat
 
     $user->update(['company_id' => $company->id]);
 
+    // Create a second manager to test CC behavior
+    $manager2 = User::factory()->create([
+        'company_id' => $company->id,
+        'role' => 'management',
+        'email' => 'another-manager@example.com',
+    ]);
+
     $customer = Customer::create([
         'company_id' => $company->id,
         'name' => 'John Doe',
@@ -147,9 +154,10 @@ test('sending invoice email triggers mail delivery with pdf attachment and updat
         ->call('sendEmail')
         ->assertHasNoErrors();
 
-    // 3. Assert Mail was sent with correct data
-    Mail::assertSent(InvoiceMail::class, function ($mail) use ($customer, $invoice) {
+    // 3. Assert Mail was sent with correct data and CC managers
+    Mail::assertSent(InvoiceMail::class, function ($mail) use ($customer, $invoice, $manager2) {
         return $mail->hasTo($customer->email) &&
+               $mail->hasCc($manager2->email) &&
                $mail->invoice->id === $invoice->id;
     });
 

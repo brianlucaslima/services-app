@@ -1,4 +1,8 @@
 <x-mail::message>
+@if($invoice->company->logo && file_exists(public_path('storage/' . $invoice->company->logo)))
+<img src="{{ $message->embed(public_path('storage/' . $invoice->company->logo)) }}" style="height: 50px; max-height: 50px; margin-bottom: 20px;" alt="{{ $invoice->company->name }}" />
+@endif
+
 # {{ __('Hello, :name!', ['name' => $invoice->customer->name]) }}
 
 {{ __('Please find attached your invoice :number from :company.', [
