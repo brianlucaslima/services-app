@@ -1,7 +1,7 @@
 <?php
 
+use App\Brain\Queries\GetCollaboratorPayoutsQuery;
 use App\Models\Invoice;
-use App\Models\ServiceInstance;
 use App\Models\User;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
@@ -42,41 +42,17 @@ Route::middleware(['auth', 'verified'])->group(function () {
         $addressType = request('address_type', 'all');
         $payoutStatus = request('payout_status', 'all');
 
+        $services = GetCollaboratorPayoutsQuery::run(
+            companyId: $user->company_id,
+            startDate: $startDate,
+            endDate: $endDate,
+            userId: (int) $id,
+            payoutStatus: $payoutStatus,
+            addressType: $addressType
+        );
+
         $start = Carbon::parse($startDate)->startOfDay();
         $end = Carbon::parse($endDate)->endOfDay();
-
-        $query = ServiceInstance::where('company_id', $user->company_id)
-            ->where('status', 'completed')
-            ->whereBetween('date', [$start->format('Y-m-d'), $end->format('Y-m-d')])
-            ->whereHas('users', fn ($q) => $q->where('users.id', $id));
-
-        if ($addressType !== 'all') {
-            $query->whereHas('address', fn ($q) => $q->where('type', $addressType));
-        }
-
-        if ($payoutStatus !== 'all') {
-            $query->where('payout_status', $payoutStatus);
-        }
-
-        $instances = $query->with(['address.customer', 'customer', 'users'])
-            ->orderBy('date')
-            ->orderBy('time')
-            ->get();
-
-        $services = $instances->map(fn ($inst) => [
-            'date' => $inst->date->format('d/m/Y'),
-            'time' => substr($inst->time, 0, 5),
-            'customer_name' => $inst->customer?->name ?? ($inst->address?->customer?->name ?? ''),
-            'location' => $inst->address?->label ?? '',
-            'location_type' => $inst->address?->type ?? 'house',
-            'description' => $inst->description,
-            'total_duration' => $inst->duration_hours,
-            'team_count' => $inst->users->count() ?: 1,
-            'share_hours' => $inst->duration_hours / ($inst->users->count() ?: 1),
-            'hourly_rate' => $user->hourly_rate,
-            'payout' => $user->hourly_rate * ($inst->duration_hours / ($inst->users->count() ?: 1)),
-            'payout_status' => $inst->payout_status ?? 'unpaid',
-        ]);
 
         $pdf = Pdf::loadView('pdf.collaborator-report', [
             'user' => $user,

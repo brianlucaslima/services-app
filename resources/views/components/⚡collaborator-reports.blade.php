@@ -77,52 +77,13 @@ new class extends Component
 
     public function refreshReports(): void
     {
-        $start = Carbon::parse($this->startDate)->startOfDay();
-        $end = $CarbonEnd = Carbon::parse($this->endDate)->endOfDay();
-        
-        $users = auth()->user()->company->users()->orderBy('name')->get();
-        
-        $summary = [];
-        foreach ($users as $user) {
-            $query = ServiceInstance::where('company_id', auth()->user()->company->id)
-                ->where('status', 'completed')
-                ->whereBetween('date', [$start->format('Y-m-d'), $end->format('Y-m-d')])
-                ->whereHas('users', fn($q) => $q->where('users.id', $user->id));
-                
-            if ($this->addressType !== 'all') {
-                $query->whereHas('address', fn($q) => $q->where('type', $this->addressType));
-            }
-            
-            if ($this->payoutStatus !== 'all') {
-                $query->where('payout_status', $this->payoutStatus);
-            }
-            
-            $instances = $query->with(['users'])->get();
-                
-            $totalHours = 0;
-            $totalPayout = 0;
-            
-            foreach ($instances as $inst) {
-                $assignedCount = $inst->users->count() ?: 1;
-                $shareHours = $inst->duration_hours / $assignedCount;
-                $totalHours += $shareHours;
-                $totalPayout += $user->hourly_rate * $shareHours;
-            }
-            
-            if ($totalHours > 0 || $user->role === 'collaborator') {
-                $summary[] = [
-                    'id' => $user->id,
-                    'name' => $user->name,
-                    'email' => $user->email,
-                    'hourly_rate' => $user->hourly_rate,
-                    'hours' => $totalHours,
-                    'payout' => $totalPayout,
-                    'services_count' => $instances->count(),
-                ];
-            }
-        }
-        
-        $this->collaboratorSummary = $summary;
+        $this->collaboratorSummary = \App\Brain\Queries\GetCollaboratorPayoutsQuery::run(
+            companyId: auth()->user()->company->id,
+            startDate: $this->startDate,
+            endDate: $this->endDate,
+            payoutStatus: $this->payoutStatus,
+            addressType: $this->addressType
+        );
 
         if ($this->selectedUserId) {
             $this->loadDetailServices();
@@ -131,43 +92,14 @@ new class extends Component
 
     public function loadDetailServices(): void
     {
-        $start = Carbon::parse($this->startDate)->startOfDay();
-        $end = Carbon::parse($this->endDate)->endOfDay();
-        $user = auth()->user()->company->users()->findOrFail($this->selectedUserId);
-        
-        $query = ServiceInstance::where('company_id', auth()->user()->company->id)
-            ->where('status', 'completed')
-            ->whereBetween('date', [$start->format('Y-m-d'), $end->format('Y-m-d')])
-            ->whereHas('users', fn($q) => $q->where('users.id', $this->selectedUserId));
-            
-        if ($this->addressType !== 'all') {
-            $query->whereHas('address', fn($q) => $q->where('type', $this->addressType));
-        }
-        
-        if ($this->payoutStatus !== 'all') {
-            $query->where('payout_status', $this->payoutStatus);
-        }
-        
-        $instances = $query->with(['address.customer', 'customer', 'users'])
-            ->orderBy('date')
-            ->orderBy('time')
-            ->get();
-            
-        $this->detailServices = $instances->map(fn($inst) => [
-            'id' => $inst->id,
-            'date' => $inst->date->format('d/m/Y'),
-            'time' => substr($inst->time, 0, 5),
-            'customer_name' => $inst->customer?->name ?? ($inst->address?->customer?->name ?? ''),
-            'location' => $inst->address?->label ?? '',
-            'location_type' => $inst->address?->type ?? 'house',
-            'description' => $inst->description,
-            'total_duration' => $inst->duration_hours,
-            'team_count' => $inst->users->count() ?: 1,
-            'share_hours' => $inst->duration_hours / ($inst->users->count() ?: 1),
-            'hourly_rate' => $user->hourly_rate,
-            'payout' => $user->hourly_rate * ($inst->duration_hours / ($inst->users->count() ?: 1)),
-            'payout_status' => $inst->payout_status ?? 'unpaid',
-        ])->toArray();
+        $this->detailServices = \App\Brain\Queries\GetCollaboratorPayoutsQuery::run(
+            companyId: auth()->user()->company->id,
+            startDate: $this->startDate,
+            endDate: $this->endDate,
+            userId: $this->selectedUserId,
+            payoutStatus: $this->payoutStatus,
+            addressType: $this->addressType
+        );
         
         $this->selectedInstanceIds = array_column(array_filter($this->detailServices, fn($s) => $s['payout_status'] === 'unpaid'), 'id');
     }
