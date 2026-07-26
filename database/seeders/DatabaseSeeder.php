@@ -51,9 +51,11 @@ class DatabaseSeeder extends Seeder
         ]);
 
         $user->update(['company_id' => $company->id]);
-        $user->companies()->attach($company->id, [
-            'role' => 'management',
-            'hourly_rate' => 25.00,
+        $user->companies()->syncWithoutDetaching([
+            $company->id => [
+                'role' => 'management',
+                'hourly_rate' => 25.00,
+            ],
         ]);
 
         // 3. Create Collaborators
@@ -64,9 +66,11 @@ class DatabaseSeeder extends Seeder
             'password' => Hash::make('password'),
             'role' => 'collaborator',
         ]);
-        $john->companies()->attach($company->id, [
-            'role' => 'collaborator',
-            'hourly_rate' => 12.50,
+        $john->companies()->syncWithoutDetaching([
+            $company->id => [
+                'role' => 'collaborator',
+                'hourly_rate' => 12.50,
+            ],
         ]);
 
         $mary = User::create([
@@ -76,9 +80,11 @@ class DatabaseSeeder extends Seeder
             'password' => Hash::make('password'),
             'role' => 'collaborator',
         ]);
-        $mary->companies()->attach($company->id, [
-            'role' => 'collaborator',
-            'hourly_rate' => 14.00,
+        $mary->companies()->syncWithoutDetaching([
+            $company->id => [
+                'role' => 'collaborator',
+                'hourly_rate' => 14.00,
+            ],
         ]);
 
         // 4. Create Service Types

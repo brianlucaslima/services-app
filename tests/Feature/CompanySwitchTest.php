@@ -16,7 +16,7 @@ test('switching companies updates user current company id', function () {
         'email' => 'one@test.com',
     ]);
     $user->update(['company_id' => $company1->id]);
-    $user->companies()->attach($company1->id, ['role' => 'management']);
+    $user->companies()->syncWithoutDetaching([$company1->id => ['role' => 'management']]);
 
     // 3. Associate user to Company 2
     $company2 = Company::create([
@@ -24,7 +24,7 @@ test('switching companies updates user current company id', function () {
         'name' => 'Company Two',
         'email' => 'two@test.com',
     ]);
-    $user->companies()->attach($company2->id, ['role' => 'management']);
+    $user->companies()->syncWithoutDetaching([$company2->id => ['role' => 'management']]);
 
     $user->refresh();
 

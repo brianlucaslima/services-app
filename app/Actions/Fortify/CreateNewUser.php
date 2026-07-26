@@ -41,10 +41,12 @@ class CreateNewUser implements CreatesNewUsers
 
         $user->update(['company_id' => $company->id]);
 
-        // Attach user to company_user pivot table as management
-        $user->companies()->attach($company->id, [
-            'role' => 'management',
-            'hourly_rate' => 0.00,
+        // Attach user to company_user pivot table as management cleanly without duplicates
+        $user->companies()->syncWithoutDetaching([
+            $company->id => [
+                'role' => 'management',
+                'hourly_rate' => 0.00,
+            ],
         ]);
 
         return $user;

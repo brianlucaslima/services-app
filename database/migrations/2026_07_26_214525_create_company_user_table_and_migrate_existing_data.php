@@ -18,6 +18,9 @@ return new class extends Migration
             $table->string('role');
             $table->decimal('hourly_rate', 8, 2)->default(0.00);
             $table->timestamps();
+
+            // Prevent duplicate users in the same company
+            $table->unique(['company_id', 'user_id']);
         });
 
         // Migrate existing user data to the pivot table
