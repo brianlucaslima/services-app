@@ -4,7 +4,7 @@
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
 
-        <title>{{ __('Welcome') }} - {{ config('app.name', 'Easy Invoices') }}</title>
+        <title>{{ __('Welcome') }} - {{ config('app.name', 'Invo Ease') }}</title>
 
         <link rel="icon" href="/favicon.ico" sizes="any">
         <link rel="icon" href="/favicon.svg" type="image/svg+xml">
@@ -14,7 +14,7 @@
         @vite(['resources/css/app.css', 'resources/js/app.js'])
     </head>
     <body class="bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 min-h-screen flex flex-col font-sans antialiased selection:bg-zinc-900 selection:text-white dark:selection:bg-white dark:selection:text-zinc-900">
-        
+
         <!-- Header -->
         <header class="border-b border-zinc-200/80 dark:border-zinc-800/50 bg-white/80 dark:bg-zinc-900/80 backdrop-blur sticky top-0 z-50">
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
@@ -22,7 +22,7 @@
                     <div class="w-9 h-9 rounded-xl bg-zinc-900 dark:bg-white flex items-center justify-center text-white dark:text-zinc-900 font-extrabold text-lg shadow-sm">
                         E
                     </div>
-                    <span class="font-bold text-lg tracking-tight text-zinc-900 dark:text-white">Easy Invoices</span>
+                    <span class="font-bold text-lg tracking-tight text-zinc-900 dark:text-white">Invo Ease</span>
                 </div>
 
                 <nav class="flex items-center gap-4">
@@ -243,7 +243,7 @@
         <!-- Footer -->
         <footer class="mt-auto border-t border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/30">
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-zinc-500 dark:text-zinc-400">
-                <p>&copy; {{ date('Y') }} Easy Invoices. {{ app()->getLocale() === 'pt_BR' ? 'Todos os direitos reservados.' : 'All rights reserved.' }}</p>
+                <p>&copy; {{ date('Y') }} Invo Ease. {{ app()->getLocale() === 'pt_BR' ? 'Todos os direitos reservados.' : 'All rights reserved.' }}</p>
                 <div class="flex items-center gap-3">
                     <span>{{ app()->getLocale() === 'pt_BR' ? 'Idioma' : 'Language' }}:</span>
                     <strong class="text-zinc-900 dark:text-white uppercase">{{ app()->getLocale() }}</strong>
