@@ -361,5 +361,8 @@
     "Modify the service details and assigned team.": "Modifique os detalhes do serviço e a equipe designada.",
     "Service deleted successfully.": "Serviço excluído com sucesso.",
     "Service updated successfully.": "Serviço atualizado com sucesso.",
-    "Switch Company": "Alternar Empresa"
+    "Switch Company": "Alternar Empresa",
+    "Access Denied": "Acesso Negado",
+    "You do not have permission to access this resource.": "Você não tem permissão para acessar este recurso.",
+    "Go back to Dashboard": "Voltar para o Painel"
 }

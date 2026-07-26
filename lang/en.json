@@ -361,5 +361,8 @@
     "Modify the service details and assigned team.": "Modify the service details and assigned team.",
     "Service deleted successfully.": "Service deleted successfully.",
     "Service updated successfully.": "Service updated successfully.",
-    "Switch Company": "Switch Company"
+    "Switch Company": "Switch Company",
+    "Access Denied": "Access Denied",
+    "You do not have permission to access this resource.": "You do not have permission to access this resource.",
+    "Go back to Dashboard": "Go back to Dashboard"
 }
