@@ -41,7 +41,8 @@ test('dashboard queries return correct role based metrics and top collaborators 
     $collab = User::factory()->create([
         'company_id' => $company->id,
         'role' => 'collaborator',
-        'hourly_rate' => 15.00,
+        'hourly_rate_house' => 15.00,
+        'hourly_rate_office' => 15.00,
     ]);
 
     // Create a completed service instance

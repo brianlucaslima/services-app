@@ -23,7 +23,8 @@ test('collaborator reports consolidated summary can be listed', function () {
     $collab = User::factory()->create([
         'company_id' => $company->id,
         'role' => 'collaborator',
-        'hourly_rate' => 15.00,
+        'hourly_rate_house' => 15.00,
+        'hourly_rate_office' => 15.00,
     ]);
 
     $customer = Customer::create([
@@ -83,7 +84,8 @@ test('collaborator reports loads detail services when a user is selected', funct
     $collab = User::factory()->create([
         'company_id' => $company->id,
         'role' => 'collaborator',
-        'hourly_rate' => 15.00,
+        'hourly_rate_house' => 15.00,
+        'hourly_rate_office' => 15.00,
     ]);
 
     $customer = Customer::create([
@@ -142,7 +144,8 @@ test('collaborator reports allows marking selected unpaid payouts as paid', func
     $collab = User::factory()->create([
         'company_id' => $company->id,
         'role' => 'collaborator',
-        'hourly_rate' => 15.00,
+        'hourly_rate_house' => 15.00,
+        'hourly_rate_office' => 15.00,
     ]);
 
     $customer = Customer::create([

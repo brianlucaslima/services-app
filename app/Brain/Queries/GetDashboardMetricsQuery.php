@@ -32,7 +32,7 @@ class GetDashboardMetricsQuery extends Query
             $instances = ServiceInstance::where('company_id', $this->companyId)
                 ->where('status', 'completed')
                 ->where('payout_status', 'unpaid')
-                ->with('users')
+                ->with(['users', 'address'])
                 ->get();
 
             $pendingPayout = 0;
@@ -40,7 +40,7 @@ class GetDashboardMetricsQuery extends Query
                 $teamCount = $inst->users->count() ?: 1;
                 $shareHours = $inst->duration_hours / $teamCount;
                 foreach ($inst->users as $u) {
-                    $pendingPayout += $u->hourly_rate * $shareHours;
+                    $pendingPayout += $u->hourlyRateFor($inst->address?->type) * $shareHours;
                 }
             }
 
@@ -73,30 +73,30 @@ class GetDashboardMetricsQuery extends Query
             ->whereMonth('date', now()->month)
             ->whereYear('date', now()->year)
             ->whereHas('users', fn ($q) => $q->where('users.id', $this->userId))
-            ->with('users')
+            ->with(['users', 'address'])
             ->get();
 
         $completedHours = 0;
+        $earningsThisMonth = 0;
         foreach ($collabInstancesThisMonth as $inst) {
             $teamCount = $inst->users->count() ?: 1;
-            $completedHours += $inst->duration_hours / $teamCount;
+            $shareHours = $inst->duration_hours / $teamCount;
+            $completedHours += $shareHours;
+            $earningsThisMonth += $collab->hourlyRateFor($inst->address?->type) * $shareHours;
         }
-
-        // 2. Earnings this month
-        $earningsThisMonth = $completedHours * $collab->hourly_rate;
 
         // 3. Pending Payout (Unpaid completed services)
         $unpaidInstances = ServiceInstance::where('company_id', $this->companyId)
             ->where('status', 'completed')
             ->where('payout_status', 'unpaid')
             ->whereHas('users', fn ($q) => $q->where('users.id', $this->userId))
-            ->with('users')
+            ->with(['users', 'address'])
             ->get();
 
         $pendingPayout = 0;
         foreach ($unpaidInstances as $inst) {
             $teamCount = $inst->users->count() ?: 1;
-            $pendingPayout += $collab->hourly_rate * ($inst->duration_hours / $teamCount);
+            $pendingPayout += $collab->hourlyRateFor($inst->address?->type) * ($inst->duration_hours / $teamCount);
         }
 
         // 4. Assigned Schedules Count

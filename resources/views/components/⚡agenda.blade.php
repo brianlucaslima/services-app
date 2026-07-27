@@ -193,7 +193,7 @@ new class extends Component
                         $duration = $schedule->address->duration_hours;
 
                         if (auth()->user()->role !== 'management') {
-                            $totalValue = auth()->user()->hourly_rate * ($duration / $assignedCount);
+                            $totalValue = auth()->user()->hourlyRateFor($schedule->address->type) * ($duration / $assignedCount);
                         } else {
                             $totalValue = $duration * $schedule->address->hourly_rate;
                         }
@@ -206,7 +206,7 @@ new class extends Component
                             'description' => $schedule->description ?: ($schedule->type ? $schedule->type->name : null),
                             'duration' => $duration,
                             'total_value' => $totalValue,
-                            'payout' => $assignedUsers->sum('hourly_rate') * ($duration / $assignedCount),
+                            'payout' => $assignedUsers->sum(fn($u) => $u->hourlyRateFor($schedule->address->type)) * ($duration / $assignedCount),
                             'time' => $schedule->start_time,
                             'recurrence' => $schedule->recurrence_type,
                             'original_date' => $dateStr,
@@ -223,7 +223,7 @@ new class extends Component
                         $duration = $schedule->address->duration_hours;
 
                         if (auth()->user()->role !== 'management') {
-                            $totalValue = auth()->user()->hourly_rate * ($duration / $assignedCount);
+                            $totalValue = auth()->user()->hourlyRateFor($schedule->address->type) * ($duration / $assignedCount);
                         } else {
                             $totalValue = $duration * $schedule->address->hourly_rate;
                         }
@@ -236,7 +236,7 @@ new class extends Component
                             'description' => $override->description,
                             'duration' => $duration,
                             'total_value' => $totalValue,
-                            'payout' => $assignedUsers->sum('hourly_rate') * ($duration / $assignedCount),
+                            'payout' => $assignedUsers->sum(fn($u) => $u->hourlyRateFor($schedule->address->type)) * ($duration / $assignedCount),
                             'time' => $override->time,
                             'recurrence' => $schedule->recurrence_type,
                             'original_date' => $dateStr,
@@ -264,7 +264,7 @@ new class extends Component
                         $duration = $instance->duration_hours;
 
                         if (auth()->user()->role !== 'management') {
-                            $totalValue = auth()->user()->hourly_rate * ($duration / $assignedCount);
+                            $totalValue = auth()->user()->hourlyRateFor($instance->address?->type) * ($duration / $assignedCount);
                         } else {
                             $totalValue = $duration * $instance->hourly_rate;
                         }
@@ -276,7 +276,7 @@ new class extends Component
                             'description' => $instance->description,
                             'duration' => $duration,
                             'total_value' => $totalValue,
-                            'payout' => $assignedUsers->sum('hourly_rate') * ($duration / $assignedCount),
+                            'payout' => $assignedUsers->sum(fn($u) => $u->hourlyRateFor($instance->address?->type)) * ($duration / $assignedCount),
                             'time' => $instance->time,
                             'recurrence' => $instance->schedule?->recurrence_type ?? 'once',
                             'original_date' => $instance->original_date ? $instance->original_date->format('Y-m-d') : $instance->date->format('Y-m-d'),

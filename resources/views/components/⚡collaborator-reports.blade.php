@@ -196,7 +196,8 @@ new class extends Component
                                 <span class="block text-xs text-zinc-500">{{ $collab['email'] }}</span>
                             </flux:table.cell>
                             <flux:table.cell class="text-zinc-600 dark:text-zinc-400">
-                                {{ Number::currency($collab['hourly_rate'], 'GBP') }}/h
+                                <span class="block text-xs text-zinc-500">{{ __('House') }}: {{ Number::currency($collab['hourly_rate_house'], 'GBP') }}/h</span>
+                                <span class="block text-xs text-zinc-500">{{ __('Office') }}: {{ Number::currency($collab['hourly_rate_office'], 'GBP') }}/h</span>
                             </flux:table.cell>
                             <flux:table.cell class="font-medium">
                                 {{ number_format($collab['hours'], 2) }}h ({{ $collab['services_count'] }} {{ __('services') }})
@@ -240,7 +241,14 @@ new class extends Component
         <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div class="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-2xl p-6 shadow-sm flex flex-col justify-between">
                 <span class="text-xs text-zinc-500 uppercase tracking-wider">{{ __('Hourly Rate') }}</span>
-                <span class="text-3xl font-extrabold text-zinc-950 dark:text-white mt-1">{{ Number::currency($this->selectedUser->hourly_rate, 'GBP') }}/h</span>
+                <div class="mt-1 space-y-1">
+                    <div class="text-sm font-semibold text-zinc-500 dark:text-zinc-400">
+                        {{ __('House') }}: <span class="text-2xl font-extrabold text-zinc-950 dark:text-white">{{ Number::currency($this->selectedUser->hourly_rate_house, 'GBP') }}/h</span>
+                    </div>
+                    <div class="text-sm font-semibold text-zinc-500 dark:text-zinc-400">
+                        {{ __('Office') }}: <span class="text-2xl font-extrabold text-zinc-950 dark:text-white">{{ Number::currency($this->selectedUser->hourly_rate_office, 'GBP') }}/h</span>
+                    </div>
+                </div>
             </div>
             <div class="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-2xl p-6 shadow-sm flex flex-col justify-between">
                 <span class="text-xs text-zinc-500 uppercase tracking-wider">{{ __('Total Hours Work') }}</span>

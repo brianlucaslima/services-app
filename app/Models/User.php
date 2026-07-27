@@ -30,7 +30,7 @@ use Laravel\Fortify\TwoFactorAuthenticatable;
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-#[Fillable(['name', 'email', 'password', 'company_id', 'role', 'hourly_rate', 'locale'])]
+#[Fillable(['name', 'email', 'password', 'company_id', 'role', 'hourly_rate', 'hourly_rate_house', 'hourly_rate_office', 'locale'])]
 #[Hidden(['password', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token'])]
 class User extends Authenticatable implements PasskeyUser
 {
@@ -64,12 +64,24 @@ class User extends Authenticatable implements PasskeyUser
 
     public ?float $tempHourlyRate = null;
 
+    public ?float $tempHourlyRateHouse = null;
+
+    public ?float $tempHourlyRateOffice = null;
+
     protected static function booted()
     {
         static::saving(function ($user) {
             if (array_key_exists('hourly_rate', $user->getAttributes())) {
                 $user->tempHourlyRate = (float) $user->getAttributes()['hourly_rate'];
                 unset($user['hourly_rate']);
+            }
+            if (array_key_exists('hourly_rate_house', $user->getAttributes())) {
+                $user->tempHourlyRateHouse = (float) $user->getAttributes()['hourly_rate_house'];
+                unset($user['hourly_rate_house']);
+            }
+            if (array_key_exists('hourly_rate_office', $user->getAttributes())) {
+                $user->tempHourlyRateOffice = (float) $user->getAttributes()['hourly_rate_office'];
+                unset($user['hourly_rate_office']);
             }
         });
 
@@ -81,6 +93,14 @@ class User extends Authenticatable implements PasskeyUser
                 if ($user->tempHourlyRate !== null) {
                     $pivotData['hourly_rate'] = $user->tempHourlyRate;
                     $user->tempHourlyRate = null;
+                }
+                if ($user->tempHourlyRateHouse !== null) {
+                    $pivotData['hourly_rate_house'] = $user->tempHourlyRateHouse;
+                    $user->tempHourlyRateHouse = null;
+                }
+                if ($user->tempHourlyRateOffice !== null) {
+                    $pivotData['hourly_rate_office'] = $user->tempHourlyRateOffice;
+                    $user->tempHourlyRateOffice = null;
                 }
 
                 // If role was explicitly changed during this save, sync it to the pivot
@@ -111,7 +131,7 @@ class User extends Authenticatable implements PasskeyUser
     public function companies(): BelongsToMany
     {
         return $this->belongsToMany(Company::class, 'company_user')
-            ->withPivot(['role', 'hourly_rate'])
+            ->withPivot(['role', 'hourly_rate', 'hourly_rate_house', 'hourly_rate_office'])
             ->withTimestamps();
     }
 
@@ -127,6 +147,25 @@ class User extends Authenticatable implements PasskeyUser
     public function getHourlyRateAttribute()
     {
         return (float) ($this->companies()->where('companies.id', $this->company_id)->first()?->pivot->hourly_rate ?? 0.00);
+    }
+
+    public function getHourlyRateHouseAttribute()
+    {
+        return (float) ($this->companies()->where('companies.id', $this->company_id)->first()?->pivot->hourly_rate_house ?? 0.00);
+    }
+
+    public function getHourlyRateOfficeAttribute()
+    {
+        return (float) ($this->companies()->where('companies.id', $this->company_id)->first()?->pivot->hourly_rate_office ?? 0.00);
+    }
+
+    public function hourlyRateFor(?string $addressType): float
+    {
+        if ($addressType === 'office') {
+            return $this->hourly_rate_office;
+        }
+
+        return $this->hourly_rate_house;
     }
 
     public function schedules(): BelongsToMany

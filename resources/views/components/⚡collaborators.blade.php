@@ -18,7 +18,8 @@ new class extends Component
     public $email = '';
     public $password = '';
     public $role = 'collaborator';
-    public $hourly_rate = 0;
+    public $hourly_rate_house = 0;
+    public $hourly_rate_office = 0;
 
     public function mount(): void
     {
@@ -59,7 +60,8 @@ new class extends Component
         $this->name = $user->name;
         $this->email = $user->email;
         $this->role = $user->pivot->role;
-        $this->hourly_rate = $user->pivot->hourly_rate;
+        $this->hourly_rate_house = $user->pivot->hourly_rate_house;
+        $this->hourly_rate_office = $user->pivot->hourly_rate_office;
         $this->showModal = true;
     }
 
@@ -73,7 +75,8 @@ new class extends Component
             'email' => $this->email,
             'password' => $this->password ?: null,
             'role' => $this->role,
-            'hourlyRate' => $this->hourly_rate,
+            'hourlyRateHouse' => $this->hourly_rate_house,
+            'hourlyRateOffice' => $this->hourly_rate_office,
         ]);
 
         if ($this->userId) {
@@ -104,7 +107,8 @@ new class extends Component
         $this->email = '';
         $this->password = '';
         $this->role = 'collaborator';
-        $this->hourly_rate = 0;
+        $this->hourly_rate_house = 0;
+        $this->hourly_rate_office = 0;
     }
 };
 
@@ -153,8 +157,9 @@ new class extends Component
                                 {{ __($collab->pivot->role) }}
                             </flux:badge>
                         </flux:table.cell>
-                        <flux:table.cell class="font-medium text-zinc-700 dark:text-zinc-300">
-                            {{ Number::currency($collab->pivot->hourly_rate, 'GBP') }}/h
+                        <flux:table.cell class="text-zinc-700 dark:text-zinc-300">
+                            <span class="block text-xs font-semibold">{{ __('House') }}: {{ Number::currency($collab->pivot->hourly_rate_house, 'GBP') }}/h</span>
+                            <span class="block text-xs font-semibold">{{ __('Office') }}: {{ Number::currency($collab->pivot->hourly_rate_office, 'GBP') }}/h</span>
                         </flux:table.cell>
                         <flux:table.cell>
                             <flux:dropdown align="end">
@@ -216,11 +221,19 @@ new class extends Component
                     <flux:error name="role" />
                 </flux:field>
 
-                <flux:field>
-                    <flux:label>{{ __('Hourly Rate') }}</flux:label>
-                    <flux:input type="number" step="0.01" wire:model="hourly_rate" icon="banknotes" required />
-                    <flux:error name="hourly_rate" />
-                </flux:field>
+                <div class="grid grid-cols-2 gap-4">
+                    <flux:field>
+                        <flux:label>{{ __('Hourly Rate (House)') }}</flux:label>
+                        <flux:input type="number" step="0.01" wire:model="hourly_rate_house" icon="banknotes" required />
+                        <flux:error name="hourly_rate_house" />
+                    </flux:field>
+
+                    <flux:field>
+                        <flux:label>{{ __('Hourly Rate (Office)') }}</flux:label>
+                        <flux:input type="number" step="0.01" wire:model="hourly_rate_office" icon="banknotes" required />
+                        <flux:error name="hourly_rate_office" />
+                    </flux:field>
+                </div>
             </div>
 
             <div class="flex gap-2">

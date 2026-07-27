@@ -23,21 +23,24 @@ class GetTopCollaboratorsQuery extends Query
             ->where('status', 'completed')
             ->whereMonth('date', now()->month)
             ->whereYear('date', now()->year)
-            ->with('users')
+            ->with(['users', 'address'])
             ->get();
 
         $collabHours = [];
         foreach ($collaborators as $collab) {
             $hours = 0;
+            $payout = 0;
             foreach ($completedInstancesThisMonth as $inst) {
                 if ($inst->users->contains($collab->id)) {
-                    $hours += $inst->duration_hours / ($inst->users->count() ?: 1);
+                    $shareHours = $inst->duration_hours / ($inst->users->count() ?: 1);
+                    $hours += $shareHours;
+                    $payout += $shareHours * $collab->hourlyRateFor($inst->address?->type);
                 }
             }
             $collabHours[] = [
                 'user' => $collab,
                 'hours' => $hours,
-                'payout' => $hours * $collab->hourly_rate,
+                'payout' => $payout,
             ];
         }
 

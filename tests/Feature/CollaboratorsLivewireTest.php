@@ -94,7 +94,8 @@ test('new collaborator can be registered', function () {
         ->set('email', 'george@lucas.co.uk')
         ->set('password', 'secret123')
         ->set('role', 'collaborator')
-        ->set('hourly_rate', 15.00)
+        ->set('hourly_rate_house', 15.00)
+        ->set('hourly_rate_office', 20.00)
         ->call('save')
         ->assertHasNoErrors()
         ->assertSee('George Lucas');
@@ -103,7 +104,8 @@ test('new collaborator can be registered', function () {
     expect($newCollab)->not->toBeNull()
         ->and($newCollab->name)->toBe('George Lucas')
         ->and($newCollab->role)->toBe('collaborator')
-        ->and((float) $newCollab->hourly_rate)->toBe(15.00)
+        ->and((float) $newCollab->hourly_rate_house)->toBe(15.00)
+        ->and((float) $newCollab->hourly_rate_office)->toBe(20.00)
         ->and(Hash::check('secret123', $newCollab->password))->toBeTrue();
 });
 
@@ -127,7 +129,8 @@ test('collaborator can be edited', function () {
         'email' => 'steven@spielberg.com',
         'password' => Hash::make('password123'),
         'role' => 'collaborator',
-        'hourly_rate' => 12.00,
+        'hourly_rate_house' => 12.00,
+        'hourly_rate_office' => 15.00,
     ]);
 
     // 2. Act as user and test Livewire editing
@@ -139,14 +142,16 @@ test('collaborator can be edited', function () {
         ->assertSet('name', 'Steven Spielberg')
         ->assertSet('email', 'steven@spielberg.com')
         ->set('name', 'Steven Spielberg II')
-        ->set('hourly_rate', 18.50)
+        ->set('hourly_rate_house', 18.50)
+        ->set('hourly_rate_office', 22.00)
         ->set('password', '') // keep same password
         ->call('save')
         ->assertHasNoErrors();
 
     $collab = $collab->fresh();
     expect($collab->name)->toBe('Steven Spielberg II')
-        ->and((float) $collab->hourly_rate)->toBe(18.50)
+        ->and((float) $collab->hourly_rate_house)->toBe(18.50)
+        ->and((float) $collab->hourly_rate_office)->toBe(22.00)
         ->and(Hash::check('password123', $collab->password))->toBeTrue(); // password untouched
 });
 
@@ -170,7 +175,8 @@ test('collaborator cannot delete themselves, but can delete others', function ()
         'email' => 'james@cameron.com',
         'password' => Hash::make('password123'),
         'role' => 'collaborator',
-        'hourly_rate' => 10.00,
+        'hourly_rate_house' => 10.00,
+        'hourly_rate_office' => 10.00,
     ]);
 
     // 2. Act as user and test Livewire deleting

@@ -60,7 +60,7 @@ class GetCollaboratorPayoutsQuery extends Query
                 'total_duration' => $inst->duration_hours,
                 'team_count' => $inst->users->count() ?: 1,
                 'share_hours' => $inst->duration_hours / ($inst->users->count() ?: 1),
-                'payout' => $user->hourly_rate * ($inst->duration_hours / ($inst->users->count() ?: 1)),
+                'payout' => $user->hourlyRateFor($inst->address?->type) * ($inst->duration_hours / ($inst->users->count() ?: 1)),
                 'payout_status' => $inst->payout_status ?? 'unpaid',
             ])->toArray();
         }
@@ -84,7 +84,7 @@ class GetCollaboratorPayoutsQuery extends Query
                 $query->where('payout_status', $this->payoutStatus);
             }
 
-            $instances = $query->with(['users'])->get();
+            $instances = $query->with(['users', 'address'])->get();
             $totalHours = 0;
             $totalPayout = 0;
 
@@ -92,7 +92,7 @@ class GetCollaboratorPayoutsQuery extends Query
                 $assignedCount = $inst->users->count() ?: 1;
                 $shareHours = $inst->duration_hours / $assignedCount;
                 $totalHours += $shareHours;
-                $totalPayout += $user->hourly_rate * $shareHours;
+                $totalPayout += $user->hourlyRateFor($inst->address?->type) * $shareHours;
             }
 
             if ($totalHours > 0 || $user->role === 'collaborator') {
@@ -100,7 +100,9 @@ class GetCollaboratorPayoutsQuery extends Query
                     'id' => $user->id,
                     'name' => $user->name,
                     'email' => $user->email,
-                    'hourly_rate' => $user->hourly_rate,
+                    'hourly_rate' => $user->hourly_rate_house,
+                    'hourly_rate_house' => $user->hourly_rate_house,
+                    'hourly_rate_office' => $user->hourly_rate_office,
                     'hours' => $totalHours,
                     'payout' => $totalPayout,
                     'services_count' => $instances->count(),

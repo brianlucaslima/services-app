@@ -17,7 +17,8 @@ use Illuminate\Support\Facades\Hash;
  * @property-read string $email
  * @property-read string|null $password
  * @property-read string $role
- * @property-read float $hourlyRate
+ * @property-read float $hourlyRateHouse
+ * @property-read float $hourlyRateOffice
  * @property int $resolvedUserId
  */
 class CreateOrUpdateCollaboratorAction extends Action
@@ -49,7 +50,8 @@ class CreateOrUpdateCollaboratorAction extends Action
                 },
             ],
             'role' => 'required|in:management,collaborator',
-            'hourlyRate' => 'required|numeric|min:0',
+            'hourlyRateHouse' => 'required|numeric|min:0',
+            'hourlyRateOffice' => 'required|numeric|min:0',
             'password' => $this->userId ? 'nullable|string|min:8' : 'required|string|min:8',
         ];
     }
@@ -91,7 +93,9 @@ class CreateOrUpdateCollaboratorAction extends Action
         // Sync the pivot table values for this company
         $user->companies()->syncWithPivotValues([$this->companyId], [
             'role' => $this->role,
-            'hourly_rate' => $this->hourlyRate,
+            'hourly_rate' => $this->hourlyRateHouse, // Fallback/compatibility
+            'hourly_rate_house' => $this->hourlyRateHouse,
+            'hourly_rate_office' => $this->hourlyRateOffice,
         ], false);
 
         $this->resolvedUserId = $user->id;

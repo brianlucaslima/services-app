@@ -37,7 +37,8 @@ test('get collaborator payouts query returns correct summary and detail reports'
     $collab = User::factory()->create([
         'company_id' => $company->id,
         'role' => 'collaborator',
-        'hourly_rate' => 12.00,
+        'hourly_rate_house' => 12.00,
+        'hourly_rate_office' => 12.00,
     ]);
 
     // Create a completed service instance with collab assigned
