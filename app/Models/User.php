@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Carbon;
@@ -96,10 +97,36 @@ class User extends Authenticatable implements PasskeyUser
                 }
                 if ($user->tempHourlyRateHouse !== null) {
                     $pivotData['hourly_rate_house'] = $user->tempHourlyRateHouse;
+
+                    // Sync to collaborator_calendar_rates
+                    $calendar = $user->company?->calendars()->where('slug', 'house')->first();
+                    if ($calendar) {
+                        CollaboratorCalendarRate::updateOrCreate([
+                            'company_id' => $companyId,
+                            'user_id' => $user->id,
+                            'calendar_id' => $calendar->id,
+                        ], [
+                            'hourly_rate' => $user->tempHourlyRateHouse,
+                        ]);
+                    }
+
                     $user->tempHourlyRateHouse = null;
                 }
                 if ($user->tempHourlyRateOffice !== null) {
                     $pivotData['hourly_rate_office'] = $user->tempHourlyRateOffice;
+
+                    // Sync to collaborator_calendar_rates
+                    $calendar = $user->company?->calendars()->where('slug', 'office')->first();
+                    if ($calendar) {
+                        CollaboratorCalendarRate::updateOrCreate([
+                            'company_id' => $companyId,
+                            'user_id' => $user->id,
+                            'calendar_id' => $calendar->id,
+                        ], [
+                            'hourly_rate' => $user->tempHourlyRateOffice,
+                        ]);
+                    }
+
                     $user->tempHourlyRateOffice = null;
                 }
 
@@ -144,6 +171,11 @@ class User extends Authenticatable implements PasskeyUser
         return $companyRole ?? ($this->attributes['role'] ?? 'collaborator');
     }
 
+    public function calendarRates(): HasMany
+    {
+        return $this->hasMany(CollaboratorCalendarRate::class);
+    }
+
     public function getHourlyRateAttribute()
     {
         return (float) ($this->companies()->where('companies.id', $this->company_id)->first()?->pivot->hourly_rate ?? 0.00);
@@ -151,21 +183,31 @@ class User extends Authenticatable implements PasskeyUser
 
     public function getHourlyRateHouseAttribute()
     {
-        return (float) ($this->companies()->where('companies.id', $this->company_id)->first()?->pivot->hourly_rate_house ?? 0.00);
+        return $this->hourlyRateFor('house');
     }
 
     public function getHourlyRateOfficeAttribute()
     {
-        return (float) ($this->companies()->where('companies.id', $this->company_id)->first()?->pivot->hourly_rate_office ?? 0.00);
+        return $this->hourlyRateFor('office');
     }
 
-    public function hourlyRateFor(?string $addressType): float
+    public function hourlyRateFor(int|string|null $calendarId): float
     {
-        if ($addressType === 'office') {
-            return $this->hourly_rate_office;
+        if (empty($calendarId)) {
+            return 0.00;
         }
 
-        return $this->hourly_rate_house;
+        // If it is a string (legacy 'house'/'office'), we resolve the correct ID matching that slug
+        if (is_string($calendarId)) {
+            $calendar = $this->company?->calendars()->where('slug', $calendarId)->first();
+            $calendarId = $calendar?->id;
+        }
+
+        if (empty($calendarId)) {
+            return 0.00;
+        }
+
+        return (float) ($this->calendarRates()->where('calendar_id', $calendarId)->first()?->hourly_rate ?? 0.00);
     }
 
     public function schedules(): BelongsToMany

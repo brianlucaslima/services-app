@@ -18,14 +18,14 @@ new class extends Component
     public $email = '';
     public $password = '';
     public $role = 'collaborator';
-    public $hourly_rate_house = 0;
-    public $hourly_rate_office = 0;
+    public array $rates = [];
 
     public function mount(): void
     {
         if (auth()->user()->role !== 'management') {
             abort(403);
         }
+        $this->resetForm();
     }
 
     public function rendering($view): void
@@ -46,6 +46,12 @@ new class extends Component
             ->get();
     }
 
+    #[Computed]
+    public function calendars()
+    {
+        return auth()->user()->company->calendars()->orderBy('name')->get();
+    }
+
     public function openCreateModal(): void
     {
         $this->resetForm();
@@ -60,8 +66,19 @@ new class extends Component
         $this->name = $user->name;
         $this->email = $user->email;
         $this->role = $user->pivot->role;
-        $this->hourly_rate_house = $user->pivot->hourly_rate_house;
-        $this->hourly_rate_office = $user->pivot->hourly_rate_office;
+        
+        $existingRates = $user->calendarRates()->where('company_id', auth()->user()->company->id)->get();
+        foreach ($existingRates as $r) {
+            $this->rates[$r->calendar_id] = (float) $r->hourly_rate;
+        }
+
+        // Fallback pre-fill for any newly created calendars
+        foreach ($this->calendars as $cal) {
+            if (! isset($this->rates[$cal->id])) {
+                $this->rates[$cal->id] = 0.00;
+            }
+        }
+
         $this->showModal = true;
     }
 
@@ -75,8 +92,7 @@ new class extends Component
             'email' => $this->email,
             'password' => $this->password ?: null,
             'role' => $this->role,
-            'hourlyRateHouse' => $this->hourly_rate_house,
-            'hourlyRateOffice' => $this->hourly_rate_office,
+            'rates' => $this->rates,
         ]);
 
         if ($this->userId) {
@@ -107,8 +123,14 @@ new class extends Component
         $this->email = '';
         $this->password = '';
         $this->role = 'collaborator';
-        $this->hourly_rate_house = 0;
-        $this->hourly_rate_office = 0;
+        $this->rates = [];
+        
+        // Ensure rates are filled with 0 for all calendars
+        if (auth()->check()) {
+            foreach ($this->calendars as $cal) {
+                $this->rates[$cal->id] = 0.00;
+            }
+        }
     }
 };
 
@@ -158,8 +180,9 @@ new class extends Component
                             </flux:badge>
                         </flux:table.cell>
                         <flux:table.cell class="text-zinc-700 dark:text-zinc-300">
-                            <span class="block text-xs font-semibold">{{ __('House') }}: {{ Number::currency($collab->pivot->hourly_rate_house, 'GBP') }}/h</span>
-                            <span class="block text-xs font-semibold">{{ __('Office') }}: {{ Number::currency($collab->pivot->hourly_rate_office, 'GBP') }}/h</span>
+                            @foreach($this->calendars as $cal)
+                                <span class="block text-xs font-semibold">{{ $cal->name }}: {{ Number::currency($collab->hourlyRateFor($cal->id), 'GBP') }}/h</span>
+                            @endforeach
                         </flux:table.cell>
                         <flux:table.cell>
                             <flux:dropdown align="end">
@@ -222,17 +245,13 @@ new class extends Component
                 </flux:field>
 
                 <div class="grid grid-cols-2 gap-4">
-                    <flux:field>
-                        <flux:label>{{ __('Hourly Rate (House)') }}</flux:label>
-                        <flux:input type="number" step="0.01" wire:model="hourly_rate_house" icon="banknotes" required />
-                        <flux:error name="hourly_rate_house" />
-                    </flux:field>
-
-                    <flux:field>
-                        <flux:label>{{ __('Hourly Rate (Office)') }}</flux:label>
-                        <flux:input type="number" step="0.01" wire:model="hourly_rate_office" icon="banknotes" required />
-                        <flux:error name="hourly_rate_office" />
-                    </flux:field>
+                    @foreach($this->calendars as $cal)
+                        <flux:field :key="'cal-rate-'.$cal->id">
+                            <flux:label>{{ __('Hourly Rate') }} ({{ $cal->name }})</flux:label>
+                            <flux:input type="number" step="0.01" wire:model="rates.{{ $cal->id }}" icon="banknotes" required />
+                            <flux:error name="rates.{{ $cal->id }}" />
+                        </flux:field>
+                    @endforeach
                 </div>
             </div>
 

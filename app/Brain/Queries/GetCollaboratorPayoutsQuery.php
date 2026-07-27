@@ -18,7 +18,7 @@ class GetCollaboratorPayoutsQuery extends Query
         public string $endDate,
         public ?int $userId = null,
         public string $payoutStatus = 'all',
-        public string $addressType = 'all'
+        public string|int $calendarId = 'all'
     ) {}
 
     public function handle(): array
@@ -36,8 +36,8 @@ class GetCollaboratorPayoutsQuery extends Query
                 ->whereBetween('date', [$start->format('Y-m-d'), $end->format('Y-m-d')])
                 ->whereHas('users', fn ($q) => $q->where('users.id', $this->userId));
 
-            if ($this->addressType !== 'all') {
-                $query->whereHas('address', fn ($q) => $q->where('type', $this->addressType));
+            if ($this->calendarId !== 'all') {
+                $query->whereHas('address', fn ($q) => $q->where('calendar_id', $this->calendarId));
             }
 
             if ($this->payoutStatus !== 'all') {
@@ -76,8 +76,8 @@ class GetCollaboratorPayoutsQuery extends Query
                 ->whereBetween('date', [$start->format('Y-m-d'), $end->format('Y-m-d')])
                 ->whereHas('users', fn ($q) => $q->where('users.id', $user->id));
 
-            if ($this->addressType !== 'all') {
-                $query->whereHas('address', fn ($q) => $q->where('type', $this->addressType));
+            if ($this->calendarId !== 'all') {
+                $query->whereHas('address', fn ($q) => $q->where('calendar_id', $this->calendarId));
             }
 
             if ($this->payoutStatus !== 'all') {

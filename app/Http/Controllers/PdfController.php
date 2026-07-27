@@ -20,7 +20,7 @@ class PdfController extends Controller
         $user = auth()->user()->company->users()->findOrFail($id);
         $startDate = request('start_date');
         $endDate = request('end_date');
-        $addressType = request('address_type', 'all');
+        $calendarId = request('calendar_id', 'all');
         $payoutStatus = request('payout_status', 'all');
 
         // Utiliza nossa Query centralizada do Brain
@@ -30,7 +30,7 @@ class PdfController extends Controller
             endDate: $endDate,
             userId: (int) $id,
             payoutStatus: $payoutStatus,
-            addressType: $addressType
+            calendarId: $calendarId
         );
 
         $start = Carbon::parse($startDate)->startOfDay();

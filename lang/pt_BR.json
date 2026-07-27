@@ -424,5 +424,19 @@
     "Company Email": "E-mail da Empresa",
     "Cannot change the status of a quote with an active invoice.": "Não é possível alterar o status de um orçamento com uma fatura ativa.",
     "This quote already has an active invoice.": "Este orçamento já possui uma fatura ativa.",
-    "Cannot delete a quote with an active invoice.": "Não é possível excluir um orçamento com uma fatura ativa."
+    "Cannot delete a quote with an active invoice.": "Não é possível excluir um orçamento com uma fatura ativa.",
+    "Calendars & Locations": "Calendários & Localidades",
+    "Create and manage your business calendar types (e.g. House, Office, Industrial).": "Crie e gerencie os tipos de calendários da sua empresa (ex: Residencial, Comercial, Industrial).",
+    "Update Calendar": "Atualizar Calendário",
+    "Add Calendar": "Adicionar Calendário",
+    "Calendar Name": "Nome do Calendário",
+    "e.g. Commercial Cleaning": "ex: Limpeza Comercial",
+    "Calendar updated successfully.": "Calendário atualizado com sucesso.",
+    "Calendar created successfully.": "Calendário criado com sucesso.",
+    "You must have at least one calendar.": "Você precisa ter ao menos um calendário.",
+    "Calendar deleted.": "Calendário excluído.",
+    "Calendar & Location Type": "Calendário & Tipo de Local",
+    "All Calendars": "Todos os Calendários",
+    "Generated from Quote": "Gerado a partir de Orçamento",
+    "This invoice was generated from Quote :number on :date.": "Esta fatura foi gerada a partir do Orçamento :number em :date."
 }

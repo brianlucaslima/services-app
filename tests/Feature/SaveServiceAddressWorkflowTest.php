@@ -45,6 +45,8 @@ test('save service address workflow creates address, saves schedules, and syncs 
         'user_ids' => [$collab->id],
     ];
 
+    $officeCalendar = $company->calendars()->where('slug', 'office')->first();
+
     // 2. Run the workflow
     $payload = SaveServiceAddressWorkflow::run([
         'customerId' => $customer->id,
@@ -57,7 +59,7 @@ test('save service address workflow creates address, saves schedules, and syncs 
         'endDate' => null,
         'durationHours' => 4.00,
         'hourlyRate' => 22.50,
-        'type' => 'office',
+        'calendarId' => $officeCalendar->id,
         'schedules' => [$scheduleData],
     ]);
 
@@ -72,6 +74,7 @@ test('save service address workflow creates address, saves schedules, and syncs 
         ->and($address->zip_code)->toBe('EC1A 1BB')
         ->and($address->duration_hours)->toBe('4.00')
         ->and($address->hourly_rate)->toBe('22.50')
+        ->and($address->calendar_id)->toBe($officeCalendar->id)
         ->and($address->type)->toBe('office');
 
     // 4. Assert schedule was created and team synced

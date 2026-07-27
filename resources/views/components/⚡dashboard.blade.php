@@ -10,6 +10,13 @@ use Illuminate\Support\Carbon;
 
 new class extends Component
 {
+    public function mount(): void
+    {
+        if (auth()->user()->role === 'superadmin') {
+            $this->redirect(route('superadmin'), navigate: true);
+        }
+    }
+
     public function rendering($view): void
     {
         $view->title(__('Dashboard'));
@@ -24,8 +31,20 @@ new class extends Component
     #[Computed]
     public function metrics(): array
     {
+        if (! auth()->user()->company_id) {
+            return [
+                'monthlyRevenue' => 0,
+                'pendingPayout' => 0,
+                'activeCustomers' => 0,
+                'completedServices' => 0,
+                'completedHours' => 0,
+                'earningsThisMonth' => 0,
+                'assignedSchedules' => 0,
+            ];
+        }
+
         return \App\Brain\Queries\GetDashboardMetricsQuery::run(
-            companyId: auth()->user()->company_id,
+            companyId: (int) auth()->user()->company_id,
             userId: auth()->id(),
             role: auth()->user()->role
         );
@@ -34,7 +53,7 @@ new class extends Component
     #[Computed]
     public function recentInvoices()
     {
-        if (!$this->isManagement()) {
+        if (! $this->isManagement() || ! auth()->user()->company_id) {
             return [];
         }
 
@@ -50,6 +69,9 @@ new class extends Component
     public function recentServices()
     {
         $companyId = auth()->user()->company_id;
+        if (! $companyId) {
+            return [];
+        }
         $userId = auth()->id();
 
         $query = ServiceInstance::where('company_id', $companyId)
@@ -68,7 +90,7 @@ new class extends Component
     #[Computed]
     public function topCollaborators()
     {
-        if (!$this->isManagement()) {
+        if (! $this->isManagement() || ! auth()->user()->company_id) {
             return [];
         }
 

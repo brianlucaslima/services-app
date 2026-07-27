@@ -32,6 +32,18 @@ class Company extends Model
         'subscription_ends_at' => 'datetime',
     ];
 
+    protected static function booted()
+    {
+        static::created(function ($company) {
+            $company->calendars()->create([
+                'name' => 'House',
+            ]);
+            $company->calendars()->create([
+                'name' => 'Office',
+            ]);
+        });
+    }
+
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
@@ -57,6 +69,11 @@ class Company extends Model
     public function quotes(): HasMany
     {
         return $this->hasMany(Quote::class);
+    }
+
+    public function calendars(): HasMany
+    {
+        return $this->hasMany(Calendar::class);
     }
 
     public function serviceTypes(): HasMany

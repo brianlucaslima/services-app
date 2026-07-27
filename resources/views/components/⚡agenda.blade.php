@@ -15,6 +15,13 @@ new class extends Component
     public float $weeklyHours = 0;
     public float $weeklyValue = 0;
     public float $weeklyPayout = 0;
+    public string $filterCalendarId = 'all';
+
+    #[Computed]
+    public function calendars()
+    {
+        return auth()->user()->company->calendars()->orderBy('name')->get();
+    }
 
     // Reschedule modal state
     public bool $showRescheduleModal = false;
@@ -33,6 +40,11 @@ new class extends Component
     }
 
     public function updatedViewDate(): void
+    {
+        $this->refreshAgenda();
+    }
+
+    public function updatedFilterCalendarId(): void
     {
         $this->refreshAgenda();
     }
@@ -154,19 +166,26 @@ new class extends Component
         $period = CarbonPeriod::create($start, $end);
 
         $companyId = auth()->user()->company->id;
-        $schedules = ServiceSchedule::whereHas('address.customer', fn($q) => $q->where('company_id', $companyId))
+        
+        $schedulesQuery = ServiceSchedule::whereHas('address.customer', fn($q) => $q->where('company_id', $companyId))
             ->with(['address.customer', 'users'])
-            ->where('is_active', true)
-            ->get();
+            ->where('is_active', true);
 
         // Get all instances in or affecting this week
-        $instances = ServiceInstance::where('company_id', $companyId)
-            ->with(['schedule.address.customer', 'users'])
+        $instancesQuery = ServiceInstance::where('company_id', $companyId)
+            ->with(['schedule.address.customer', 'users', 'address'])
             ->where(function($query) use ($start, $end) {
                 $query->whereBetween('date', [$start->format('Y-m-d'), $end->format('Y-m-d')])
                       ->orWhereBetween('original_date', [$start->format('Y-m-d'), $end->format('Y-m-d')]);
-            })
-            ->get();
+            });
+
+        if ($this->filterCalendarId !== 'all') {
+            $schedulesQuery->whereHas('address', fn($q) => $q->where('calendar_id', $this->filterCalendarId));
+            $instancesQuery->whereHas('address', fn($q) => $q->where('calendar_id', $this->filterCalendarId));
+        }
+
+        $schedules = $schedulesQuery->get();
+        $instances = $instancesQuery->get();
 
         // If basic access (collaborator), filter to only see what they are part of
         if (auth()->user()->role !== 'management') {
@@ -393,8 +412,15 @@ new class extends Component
             </div>
         </div>
 
-        <div class="flex items-center gap-2">
-            <flux:button.group>
+        <div class="flex flex-col sm:flex-row items-center gap-3">
+            <flux:select wire:model.live="filterCalendarId" class="w-full sm:w-44" size="sm">
+                <flux:select.option value="all">{{ __('All Calendars') }}</flux:select.option>
+                @foreach($this->calendars as $cal)
+                    <flux:select.option value="{{ $cal->id }}">{{ $cal->name }}</flux:select.option>
+                @endforeach
+            </flux:select>
+
+            <flux:button.group class="w-full sm:w-auto justify-center">
                 <flux:button wire:click="prevWeek" icon="chevron-left" variant="outline" />
                 <flux:button wire:click="goToToday" variant="outline">{{ __('Today') }}</flux:button>
                 <flux:button wire:click="nextWeek" icon="chevron-right" variant="outline" />

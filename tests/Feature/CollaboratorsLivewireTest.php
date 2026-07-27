@@ -89,13 +89,16 @@ test('new collaborator can be registered', function () {
     // 2. Act as user and test Livewire registration
     $this->actingAs($user);
 
+    $houseCalendar = $company->calendars()->where('slug', 'house')->first();
+    $officeCalendar = $company->calendars()->where('slug', 'office')->first();
+
     Livewire::test('collaborators')
         ->set('name', 'George Lucas')
         ->set('email', 'george@lucas.co.uk')
         ->set('password', 'secret123')
         ->set('role', 'collaborator')
-        ->set('hourly_rate_house', 15.00)
-        ->set('hourly_rate_office', 20.00)
+        ->set('rates.'.$houseCalendar->id, 15.00)
+        ->set('rates.'.$officeCalendar->id, 20.00)
         ->call('save')
         ->assertHasNoErrors()
         ->assertSee('George Lucas');
@@ -136,14 +139,17 @@ test('collaborator can be edited', function () {
     // 2. Act as user and test Livewire editing
     $this->actingAs($user);
 
+    $houseCalendar = $company->calendars()->where('slug', 'house')->first();
+    $officeCalendar = $company->calendars()->where('slug', 'office')->first();
+
     Livewire::test('collaborators')
         ->call('openEditModal', $collab->id)
         ->assertSet('userId', $collab->id)
         ->assertSet('name', 'Steven Spielberg')
         ->assertSet('email', 'steven@spielberg.com')
         ->set('name', 'Steven Spielberg II')
-        ->set('hourly_rate_house', 18.50)
-        ->set('hourly_rate_office', 22.00)
+        ->set('rates.'.$houseCalendar->id, 18.50)
+        ->set('rates.'.$officeCalendar->id, 22.00)
         ->set('password', '') // keep same password
         ->call('save')
         ->assertHasNoErrors();

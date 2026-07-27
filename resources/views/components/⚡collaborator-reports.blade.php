@@ -11,7 +11,7 @@ new class extends Component
 {
     public string $startDate;
     public string $endDate;
-    public string $addressType = 'all'; // all, house, office
+    public string $calendarId = 'all'; // all or calendar_id
     public string $payoutStatus = 'unpaid'; // all, unpaid, paid
     public array $collaboratorSummary = [];
     public array $detailServices = [];
@@ -36,7 +36,7 @@ new class extends Component
 
     public function updatedStartDate(): void { $this->refreshReports(); }
     public function updatedEndDate(): void { $this->refreshReports(); }
-    public function updatedAddressType(): void { $this->refreshReports(); }
+    public function updatedCalendarId(): void { $this->refreshReports(); }
     public function updatedPayoutStatus(): void { $this->refreshReports(); }
 
     public function nextWeek(): void
@@ -82,7 +82,7 @@ new class extends Component
             startDate: $this->startDate,
             endDate: $this->endDate,
             payoutStatus: $this->payoutStatus,
-            addressType: $this->addressType
+            calendarId: $this->calendarId
         );
 
         if ($this->selectedUserId) {
@@ -98,7 +98,7 @@ new class extends Component
             endDate: $this->endDate,
             userId: $this->selectedUserId,
             payoutStatus: $this->payoutStatus,
-            addressType: $this->addressType
+            calendarId: $this->calendarId
         );
         
         $this->selectedInstanceIds = array_column(array_filter($this->detailServices, fn($s) => $s['payout_status'] === 'unpaid'), 'id');
@@ -125,6 +125,12 @@ new class extends Component
     public function selectedUser()
     {
         return $this->selectedUserId ? auth()->user()->company->users()->find($this->selectedUserId) : null;
+    }
+
+    #[Computed]
+    public function calendars()
+    {
+        return auth()->user()->company->calendars()->orderBy('name')->get();
     }
 };
 
@@ -160,11 +166,12 @@ new class extends Component
             </flux:field>
 
             <flux:field>
-                <flux:label>{{ __('Location Type') }}</flux:label>
-                <flux:select wire:model.live="addressType">
-                    <flux:select.option value="all">{{ __('All Types') }}</flux:select.option>
-                    <flux:select.option value="house">{{ __('House') }}</flux:select.option>
-                    <flux:select.option value="office">{{ __('Office') }}</flux:select.option>
+                <flux:label>{{ __('Calendar & Location Type') }}</flux:label>
+                <flux:select wire:model.live="calendarId">
+                    <flux:select.option value="all">{{ __('All Calendars') }}</flux:select.option>
+                    @foreach($this->calendars as $cal)
+                        <flux:select.option value="{{ $cal->id }}">{{ $cal->name }}</flux:select.option>
+                    @endforeach
                 </flux:select>
             </flux:field>
 
@@ -230,7 +237,7 @@ new class extends Component
                 </div>
             </div>
 
-            <a href="{{ route('reports.pdf', ['id' => $selectedUserId, 'start_date' => $startDate, 'end_date' => $endDate, 'address_type' => $addressType, 'payout_status' => $payoutStatus]) }}" target="_blank" class="inline-flex items-center justify-center gap-2 rounded-lg bg-zinc-900 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-zinc-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200 w-full sm:w-auto">
+            <a href="{{ route('reports.pdf', ['id' => $selectedUserId, 'start_date' => $startDate, 'end_date' => $endDate, 'calendar_id' => $calendarId, 'payout_status' => $payoutStatus]) }}" target="_blank" class="inline-flex items-center justify-center gap-2 rounded-lg bg-zinc-900 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-zinc-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200 w-full sm:w-auto">
                 <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 015.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"/>
                 </svg>
@@ -242,12 +249,11 @@ new class extends Component
             <div class="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-2xl p-6 shadow-sm flex flex-col justify-between">
                 <span class="text-xs text-zinc-500 uppercase tracking-wider">{{ __('Hourly Rate') }}</span>
                 <div class="mt-1 space-y-1">
-                    <div class="text-sm font-semibold text-zinc-500 dark:text-zinc-400">
-                        {{ __('House') }}: <span class="text-2xl font-extrabold text-zinc-950 dark:text-white">{{ Number::currency($this->selectedUser->hourly_rate_house, 'GBP') }}/h</span>
-                    </div>
-                    <div class="text-sm font-semibold text-zinc-500 dark:text-zinc-400">
-                        {{ __('Office') }}: <span class="text-2xl font-extrabold text-zinc-950 dark:text-white">{{ Number::currency($this->selectedUser->hourly_rate_office, 'GBP') }}/h</span>
-                    </div>
+                    @foreach($this->calendars as $cal)
+                        <div class="text-sm font-semibold text-zinc-550 dark:text-zinc-400">
+                            {{ $cal->name }}: <span class="text-base font-bold text-zinc-950 dark:text-white">{{ Number::currency($this->selectedUser->hourlyRateFor($cal->id), 'GBP') }}/h</span>
+                        </div>
+                    @endforeach
                 </div>
             </div>
             <div class="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-2xl p-6 shadow-sm flex flex-col justify-between">

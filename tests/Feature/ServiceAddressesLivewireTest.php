@@ -28,8 +28,11 @@ test('service addresses can be listed for a customer', function () {
         'email' => 'john@example.com',
     ]);
 
+    $officeCalendar = $company->calendars()->where('slug', 'office')->first();
+
     $address = ServiceAddress::create([
         'customer_id' => $customer->id,
+        'calendar_id' => $officeCalendar->id,
         'label' => 'Main Office',
         'address' => '123 Business Rd',
         'is_active' => true,
@@ -79,6 +82,8 @@ test('service address with recurring schedules can be created', function () {
     // 2. Act as user and test Livewire creation
     $this->actingAs($user);
 
+    $officeCalendar = $company->calendars()->where('slug', 'office')->first();
+
     Livewire::test('service-addresses', ['id' => $customer->id])
         ->call('openCreateModal')
         ->set('label', 'HQ Office')
@@ -88,7 +93,7 @@ test('service address with recurring schedules can be created', function () {
         ->set('start_date', now()->format('Y-m-d'))
         ->set('duration_hours', 4.00)
         ->set('hourly_rate', 22.50)
-        ->set('type', 'office')
+        ->set('calendar_id', $officeCalendar->id)
         // Add a nested schedule
         ->call('addSchedule')
         ->set('schedules.0.service_type_id', $type->id)
@@ -101,7 +106,8 @@ test('service address with recurring schedules can be created', function () {
         ->assertHasNoErrors();
 
     $address = ServiceAddress::where('customer_id', $customer->id)->where('label', 'HQ Office')->first();
-    expect($address)->not->toBeNull();
+    expect($address)->not->toBeNull()
+        ->and($address->calendar_id)->toBe($officeCalendar->id);
 
     $schedule = ServiceSchedule::where('service_address_id', $address->id)->first();
     expect($schedule)->not->toBeNull()
@@ -163,8 +169,11 @@ test('service address can be edited and deleted', function () {
         'email' => 'john@example.com',
     ]);
 
+    $officeCalendar = $company->calendars()->where('slug', 'office')->first();
+
     $address = ServiceAddress::create([
         'customer_id' => $customer->id,
+        'calendar_id' => $officeCalendar->id,
         'label' => 'Main Office',
         'address' => '123 Business Rd',
         'is_active' => true,

@@ -18,6 +18,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::livewire('agenda', 'agenda')->name('agenda');
     Route::livewire('invoices', 'invoices')->name('invoices');
     Route::livewire('quotes', 'quotes')->name('quotes');
+    Route::livewire('calendars', 'calendars')->name('calendars');
     Route::livewire('service-types', 'service-types')->name('service-types');
     Route::livewire('collaborators', 'collaborators')->name('collaborators');
     Route::livewire('reports', 'collaborator-reports')->name('reports');

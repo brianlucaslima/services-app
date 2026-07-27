@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Brain\Collaborators\Actions;
 
+use App\Models\CollaboratorCalendarRate;
 use App\Models\User;
 use Brain\Action;
 use Illuminate\Support\Facades\Hash;
@@ -17,8 +18,7 @@ use Illuminate\Support\Facades\Hash;
  * @property-read string $email
  * @property-read string|null $password
  * @property-read string $role
- * @property-read float $hourlyRateHouse
- * @property-read float $hourlyRateOffice
+ * @property-read array $rates
  * @property int $resolvedUserId
  */
 class CreateOrUpdateCollaboratorAction extends Action
@@ -50,8 +50,8 @@ class CreateOrUpdateCollaboratorAction extends Action
                 },
             ],
             'role' => 'required|in:management,collaborator',
-            'hourlyRateHouse' => 'required|numeric|min:0',
-            'hourlyRateOffice' => 'required|numeric|min:0',
+            'rates' => 'required|array',
+            'rates.*' => 'required|numeric|min:0',
             'password' => $this->userId ? 'nullable|string|min:8' : 'required|string|min:8',
         ];
     }
@@ -93,10 +93,19 @@ class CreateOrUpdateCollaboratorAction extends Action
         // Sync the pivot table values for this company
         $user->companies()->syncWithPivotValues([$this->companyId], [
             'role' => $this->role,
-            'hourly_rate' => $this->hourlyRateHouse, // Fallback/compatibility
-            'hourly_rate_house' => $this->hourlyRateHouse,
-            'hourly_rate_office' => $this->hourlyRateOffice,
+            'hourly_rate' => $this->rates[1] ?? ($this->rates[array_key_first($this->rates)] ?? 0.00), // legacy fallback
         ], false);
+
+        // Save dynamic rates per calendar
+        foreach ($this->rates as $calendarId => $rate) {
+            CollaboratorCalendarRate::updateOrCreate([
+                'company_id' => $this->companyId,
+                'user_id' => $user->id,
+                'calendar_id' => $calendarId,
+            ], [
+                'hourly_rate' => $rate,
+            ]);
+        }
 
         $this->resolvedUserId = $user->id;
 

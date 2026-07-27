@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Brain\Customers\Actions;
 
+use App\Models\Calendar;
 use App\Models\Customer;
 use Brain\Action;
 
@@ -20,7 +21,7 @@ use Brain\Action;
  * @property-read string|null $endDate
  * @property-read float $durationHours
  * @property-read float $hourlyRate
- * @property-read string $type
+ * @property-read int $calendarId
  * @property int $resolvedAddressId
  */
 class CreateOrUpdateServiceAddressAction extends Action
@@ -35,13 +36,16 @@ class CreateOrUpdateServiceAddressAction extends Action
             'endDate' => 'nullable|date|after_or_equal:startDate',
             'durationHours' => 'required|numeric|min:0',
             'hourlyRate' => 'required|numeric|min:0',
-            'type' => 'required|in:house,office',
+            'calendarId' => 'required|exists:calendars,id',
         ];
     }
 
     public function handle(): self
     {
         $customer = Customer::findOrFail($this->customerId);
+
+        $calendar = Calendar::find($this->calendarId);
+        $typeSlug = $calendar ? $calendar->slug : 'house';
 
         $address = $customer->addresses()->updateOrCreate(
             ['id' => $this->addressId],
@@ -54,7 +58,8 @@ class CreateOrUpdateServiceAddressAction extends Action
                 'end_date' => $this->endDate ?: null,
                 'duration_hours' => $this->durationHours,
                 'hourly_rate' => $this->hourlyRate,
-                'type' => $this->type,
+                'calendar_id' => $this->calendarId,
+                'type' => $typeSlug,
             ]
         );
 

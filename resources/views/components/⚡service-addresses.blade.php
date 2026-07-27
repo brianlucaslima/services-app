@@ -23,7 +23,7 @@ new class extends Component
     public $end_date = '';
     public $duration_hours = 0;
     public $hourly_rate = 0;
-    public string $type = 'house';
+    public ?int $calendar_id = null;
 
     // Schedules for the current address being edited
     public $schedules = [];
@@ -38,6 +38,7 @@ new class extends Component
 
         $this->customer = auth()->user()->company->customers()->findOrFail($id);
         $this->refreshAddresses();
+        $this->resetForm();
     }
 
     public function rendering($view): void
@@ -70,7 +71,7 @@ new class extends Component
         $this->end_date = $address->end_date ? $address->end_date->format('Y-m-d') : '';
         $this->duration_hours = $address->duration_hours;
         $this->hourly_rate = $address->hourly_rate;
-        $this->type = $address->type ?? 'house';
+        $this->calendar_id = $address->calendar_id;
 
         foreach ($address->schedules as $schedule) {
             $this->schedules[] = [
@@ -104,7 +105,7 @@ new class extends Component
         $this->end_date = '';
         $this->duration_hours = 0;
         $this->hourly_rate = 0;
-        $this->type = 'house';
+        $this->calendar_id = auth()->check() ? (auth()->user()->company->calendars()->first()?->id) : null;
         $this->schedules = [];
         $this->showModal = false;
     }
@@ -139,7 +140,7 @@ new class extends Component
             'end_date' => 'nullable|date|after_or_equal:start_date',
             'duration_hours' => 'required|numeric|min:0',
             'hourly_rate' => 'required|numeric|min:0',
-            'type' => 'required|in:house,office',
+            'calendar_id' => 'required|exists:calendars,id',
             'schedules.*.recurrence_type' => 'required|in:once,weekly,fortnightly,monthly',
             'schedules.*.start_date' => 'required|date',
             'schedules.*.start_time' => 'required',
@@ -157,7 +158,7 @@ new class extends Component
             'endDate' => $this->end_date,
             'durationHours' => $this->duration_hours,
             'hourlyRate' => $this->hourly_rate,
-            'type' => $this->type,
+            'calendarId' => $this->calendar_id,
             'schedules' => $this->schedules,
         ]);
 
@@ -171,6 +172,12 @@ new class extends Component
         $this->customer->addresses()->findOrFail($id)->delete();
         Flux::toast(variant: 'success', text: __('Address deleted.'));
         $this->refreshAddresses();
+    }
+
+    #[Computed]
+    public function calendars()
+    {
+        return auth()->user()->company->calendars()->orderBy('name')->get();
     }
 
     #[Computed]
@@ -211,7 +218,7 @@ new class extends Component
                     <div>
                         <h3 class="font-bold text-zinc-900 dark:text-white flex items-center gap-2">
                             {{ $addr['label'] }}
-                            <flux:badge size="sm" :color="$addr['type'] === 'house' ? 'zinc' : 'blue'">{{ __($addr['type']) }}</flux:badge>
+                            <flux:badge size="sm" color="zinc">{{ \App\Models\Calendar::find($addr['calendar_id'])?->name ?? __($addr['type']) }}</flux:badge>
                         </h3>
                         <p class="text-sm text-zinc-500 dark:text-zinc-400">{{ $addr['address'] }}</p>
 
@@ -286,11 +293,13 @@ new class extends Component
                             </flux:field>
 
                             <flux:field>
-                                <flux:label>{{ __('Location Type') }}</flux:label>
-                                <flux:select wire:model="type">
-                                    <flux:select.option value="house">{{ __('House') }}</flux:select.option>
-                                    <flux:select.option value="office">{{ __('Office') }}</flux:select.option>
+                                <flux:label>{{ __('Calendar & Location Type') }}</flux:label>
+                                <flux:select wire:model="calendar_id" required>
+                                    @foreach($this->calendars as $cal)
+                                        <flux:select.option value="{{ $cal->id }}">{{ $cal->name }}</flux:select.option>
+                                    @endforeach
                                 </flux:select>
+                                <flux:error name="calendar_id" />
                             </flux:field>
                         </div>
 

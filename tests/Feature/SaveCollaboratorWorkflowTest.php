@@ -17,6 +17,9 @@ test('save collaborator workflow registers new collaborator and hashes password'
     $owner->update(['company_id' => $company->id]);
 
     // 2. Run the workflow to register a new collaborator
+    $houseCalendar = $company->calendars()->where('slug', 'house')->first();
+    $officeCalendar = $company->calendars()->where('slug', 'office')->first();
+
     $payload = SaveCollaboratorWorkflow::run([
         'companyId' => $company->id,
         'userId' => null,
@@ -24,8 +27,10 @@ test('save collaborator workflow registers new collaborator and hashes password'
         'email' => 'john.collab@example.com',
         'password' => 'secret123',
         'role' => 'collaborator',
-        'hourlyRateHouse' => 15.50,
-        'hourlyRateOffice' => 18.50,
+        'rates' => [
+            $houseCalendar->id => 15.50,
+            $officeCalendar->id => 18.50,
+        ],
     ]);
 
     // 3. Assert collaborator was created with correct values
@@ -64,6 +69,9 @@ test('save collaborator workflow updates existing collaborator', function () {
     ]);
 
     // 2. Run the workflow to update the collaborator
+    $houseCalendar = $company->calendars()->where('slug', 'house')->first();
+    $officeCalendar = $company->calendars()->where('slug', 'office')->first();
+
     SaveCollaboratorWorkflow::run([
         'companyId' => $company->id,
         'userId' => $collab->id,
@@ -71,8 +79,10 @@ test('save collaborator workflow updates existing collaborator', function () {
         'email' => 'new.email@example.com',
         'password' => null, // keep same password
         'role' => 'management',
-        'hourlyRateHouse' => 20.00,
-        'hourlyRateOffice' => 25.00,
+        'rates' => [
+            $houseCalendar->id => 20.00,
+            $officeCalendar->id => 25.00,
+        ],
     ]);
 
     // 3. Assert values were updated correctly
@@ -80,7 +90,7 @@ test('save collaborator workflow updates existing collaborator', function () {
     expect($collab->name)->toBe('New Name')
         ->and($collab->email)->toBe('new.email@example.com')
         ->and($collab->role)->toBe('management')
-        ->and((float) $collab->hourly_rate_house)->toBe(20.0)
-        ->and((float) $collab->hourly_rate_office)->toBe(25.0)
+        ->and((float) $collab->hourly_rate_house)->toBe(20.00)
+        ->and((float) $collab->hourly_rate_office)->toBe(25.00)
         ->and(Hash::check('password', $collab->password))->toBeTrue(); // password untouched!
 });

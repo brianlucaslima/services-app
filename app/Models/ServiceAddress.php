@@ -10,6 +10,7 @@ class ServiceAddress extends Model
 {
     protected $fillable = [
         'customer_id',
+        'calendar_id',
         'label',
         'address',
         'city',
@@ -30,6 +31,11 @@ class ServiceAddress extends Model
         'hourly_rate' => 'decimal:2',
         'is_active' => 'boolean',
     ];
+
+    public function calendar(): BelongsTo
+    {
+        return $this->belongsTo(Calendar::class);
+    }
 
     public function customer(): BelongsTo
     {

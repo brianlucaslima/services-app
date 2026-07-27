@@ -146,9 +146,10 @@
     <div class="summary-box">
         <div class="summary-col">
             <span style="color: #71717a; text-transform: uppercase; font-size: 10px;">{{ __('Hourly Rate') }}</span>
-            <div class="summary-value" style="font-size: 11px; line-height: 1.2; margin-top: 2px;">
-                H: {{ Number::currency($user->hourly_rate_house, 'GBP') }}/h<br>
-                O: {{ Number::currency($user->hourly_rate_office, 'GBP') }}/h
+            <div class="summary-value" style="font-size: 10px; line-height: 1.2; margin-top: 2px;">
+                @foreach($company->calendars as $cal)
+                    {{ $cal->name }}: {{ Number::currency($user->hourlyRateFor($cal->id), 'GBP') }}/h<br>
+                @endforeach
             </div>
         </div>
         <div class="summary-col">

@@ -30,6 +30,10 @@
                             {{ __('Quotes & Estimates') }}
                         </flux:sidebar.item>
 
+                        <flux:sidebar.item icon="calendar" :href="route('calendars')" :current="request()->routeIs('calendars')" wire:navigate>
+                            {{ __('Calendars & Locations') }}
+                        </flux:sidebar.item>
+
                         <flux:sidebar.item icon="briefcase" :href="route('service-types')" :current="request()->routeIs('service-types')" wire:navigate>
                             {{ __('Services') }}
                         </flux:sidebar.item>

@@ -577,7 +577,7 @@ new class extends Component
     #[Computed]
     public function selectedInvoice()
     {
-        return $this->selectedInvoiceId ? auth()->user()->company->invoices()->with(['customer', 'items'])->find($this->selectedInvoiceId) : null;
+        return $this->selectedInvoiceId ? auth()->user()->company->invoices()->with(['customer', 'items', 'quote'])->find($this->selectedInvoiceId) : null;
     }
 };
 
@@ -930,6 +930,18 @@ new class extends Component
                 <div class="bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 p-4 rounded-2xl text-center">
                     <span class="text-base font-bold text-red-600 dark:text-red-400 uppercase tracking-widest block">{{ __('DRAFT INVOICE') }}</span>
                     <span class="text-xs text-zinc-500 dark:text-zinc-400 block mt-1">{{ __('This invoice has not been issued yet. The PDF download will contain a "DRAFT" watermark.') }}</span>
+                </div>
+            @endif
+
+            @if($inv->quote_id && $inv->quote)
+                <div class="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 p-4 rounded-2xl flex items-center gap-3">
+                    <flux:icon.document-text class="w-5 h-5 text-blue-500" />
+                    <div>
+                        <span class="text-sm font-semibold text-zinc-900 dark:text-white">{{ __('Generated from Quote') }}</span>
+                        <span class="block text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+                            {{ __('This invoice was generated from Quote :number on :date.', ['number' => $inv->quote->number, 'date' => $inv->quote->date->format('d/m/Y')]) }}
+                        </span>
+                    </div>
                 </div>
             @endif
 
