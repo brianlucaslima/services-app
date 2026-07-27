@@ -5,6 +5,7 @@ use App\Models\Company;
 use App\Models\Customer;
 use App\Models\EmailLog;
 use App\Models\Invoice;
+use App\Models\InvoiceItem;
 use App\Models\ServiceAddress;
 use App\Models\ServiceInstance;
 use App\Models\ServiceType;
@@ -321,4 +322,104 @@ test('pending completed services can be edited and deleted inside the invoice sc
         ->assertHasNoErrors();
 
     expect(ServiceInstance::find($instance->id))->toBeNull();
+});
+
+test('draft invoice can be edited by going back to the service selection screen', function () {
+    // 1. Setup company and user
+    $user = User::factory()->create([
+        'role' => 'management',
+    ]);
+    $company = Company::create([
+        'user_id' => $user->id,
+        'name' => 'Invoease HQ',
+        'email' => 'hq@invoease.co.uk',
+    ]);
+    $user->update(['company_id' => $company->id]);
+    $user->refresh();
+
+    $customer = Customer::create([
+        'company_id' => $company->id,
+        'name' => 'John Doe',
+        'email' => 'john@example.com',
+    ]);
+
+    $address = ServiceAddress::create([
+        'customer_id' => $customer->id,
+        'label' => 'Main Office',
+        'address' => '123 Business Rd',
+        'is_active' => true,
+        'type' => 'office',
+        'duration_hours' => 2.00,
+        'hourly_rate' => 20.00,
+        'start_date' => now()->format('Y-m-d'),
+    ]);
+
+    $instance1 = ServiceInstance::create([
+        'company_id' => $company->id,
+        'customer_id' => $customer->id,
+        'service_address_id' => $address->id,
+        'description' => 'First Cleaning Work',
+        'date' => now()->format('Y-m-d'),
+        'time' => '10:00:00',
+        'duration_hours' => 2.00,
+        'hourly_rate' => 20.00,
+        'status' => 'completed',
+    ]);
+
+    $instance2 = ServiceInstance::create([
+        'company_id' => $company->id,
+        'customer_id' => $customer->id,
+        'service_address_id' => $address->id,
+        'description' => 'Second Cleaning Work',
+        'date' => now()->format('Y-m-d'),
+        'time' => '12:00:00',
+        'duration_hours' => 3.00,
+        'hourly_rate' => 20.00,
+        'status' => 'completed',
+    ]);
+
+    // Create invoice only for instance1 initially
+    $invoice = Invoice::create([
+        'company_id' => $company->id,
+        'customer_id' => $customer->id,
+        'number' => '0001',
+        'date' => now(),
+        'due_date' => now()->addDays(14),
+        'status' => 'draft',
+        'total_amount' => 40.00,
+    ]);
+
+    $item1 = InvoiceItem::create([
+        'invoice_id' => $invoice->id,
+        'service_instance_id' => $instance1->id,
+        'description' => 'First Cleaning Work - Main Office ('.now()->format('d/m/Y').')',
+        'quantity' => 2.00,
+        'unit_price' => 20.00,
+        'amount' => 40.00,
+    ]);
+
+    $this->actingAs($user);
+
+    // 2. Test Livewire Edit Invoice Workflow
+    Livewire::test('invoices')
+        ->set('selectedInvoiceId', $invoice->id)
+        ->call('editInvoice')
+        ->assertSet('editingInvoiceId', $invoice->id)
+        ->assertSet('screen', 'select_services')
+        ->assertSet('selectedServiceIds', [$instance1->id])
+        // Let's add instance2 to the invoice as well!
+        ->set('selectedServiceIds', [$instance1->id, $instance2->id])
+        ->set('notes', 'Added more services during edit')
+        ->call('generateInvoice')
+        ->assertHasNoErrors()
+        ->assertSet('screen', 'detail')
+        ->assertSet('editingInvoiceId', null);
+
+    $invoice = $invoice->fresh();
+    expect($invoice->notes)->toBe('Added more services during edit')
+        ->and((float) $invoice->total_amount)->toBe(100.00); // (2h + 3h) * 20 = 100.00
+
+    expect($invoice->items->count())->toBe(1); // Grouped into 1 line since same week/type/address!
+    expect($invoice->items->first()->quantity)->toBe('5.00')
+        ->and((float) $invoice->items->first()->amount)->toBe(100.00);
 });

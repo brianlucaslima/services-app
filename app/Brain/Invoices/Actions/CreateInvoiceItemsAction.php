@@ -30,7 +30,9 @@ class CreateInvoiceItemsAction extends Action
         $invoice = Invoice::findOrFail($this->invoiceId);
         $total = 0;
 
-        $services = ServiceInstance::with('address')->findMany($this->selectedServiceIds);
+        $services = ServiceInstance::with('address')
+            ->findMany($this->selectedServiceIds)
+            ->sortBy('date');
 
         // Group services by week, service type, service address, and hourly rate
         $groups = [];

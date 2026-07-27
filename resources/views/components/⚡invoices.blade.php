@@ -20,6 +20,9 @@ new class extends Component
     public bool $showSendConfirmationModal = false;
     public int $selectedInvoiceSentCount = 0;
 
+    // Edit Invoice State
+    public ?int $editingInvoiceId = null;
+
     // Screens: 'list', 'select_customer', 'select_services', 'detail'
     public string $screen = 'list';
     public ?int $selectedInvoiceId = null;
@@ -143,6 +146,7 @@ new class extends Component
         $this->selectedCustomerId = null;
         $this->notes = '';
         $this->customerSearch = '';
+        $this->editingInvoiceId = null;
         $this->screen = 'list'; // To trigger state cleanup
         $this->screen = 'select_customer';
     }
@@ -157,12 +161,21 @@ new class extends Component
 
     public function loadPendingServices(): void
     {
-        $this->pendingServices = ServiceInstance::query()
+        $query = ServiceInstance::query()
             ->where('company_id', auth()->user()->company->id)
             ->where('status', 'completed')
-            ->where('customer_id', $this->selectedCustomerId)
-            ->whereDoesntHave('invoiceItem')
-            ->orderBy('date', 'desc')
+            ->where('customer_id', $this->selectedCustomerId);
+
+        if ($this->editingInvoiceId) {
+            $query->where(function($q) {
+                $q->whereDoesntHave('invoiceItem')
+                  ->orWhereHas('invoiceItem', fn($sub) => $sub->where('invoice_id', $this->editingInvoiceId));
+            });
+        } else {
+            $query->whereDoesntHave('invoiceItem');
+        }
+
+        $this->pendingServices = $query->orderBy('date', 'asc')
             ->get()
             ->map(fn($item) => [
                 'id' => $item->id,
@@ -174,7 +187,10 @@ new class extends Component
             ])
             ->toArray();
 
-        $this->selectedServiceIds = array_column($this->pendingServices, 'id');
+        // Only default selected checkboxes to everything if NOT editing an invoice!
+        if (!$this->editingInvoiceId) {
+            $this->selectedServiceIds = array_column($this->pendingServices, 'id');
+        }
     }
 
     public function updatedManualAddressId($value): void
@@ -309,6 +325,32 @@ new class extends Component
             return;
         }
 
+        if ($this->editingInvoiceId) {
+            $invoice = auth()->user()->company->invoices()->findOrFail($this->editingInvoiceId);
+            
+            $invoice->update([
+                'date' => $this->invoiceDate,
+                'due_date' => $this->dueDate,
+                'notes' => $this->notes ?: null,
+            ]);
+
+            // Clear old items
+            $invoice->items()->delete();
+
+            // Create new items using CreateInvoiceItemsAction
+            \App\Brain\Invoices\Actions\CreateInvoiceItemsAction::run([
+                'invoiceId' => $invoice->id,
+                'selectedServiceIds' => $this->selectedServiceIds,
+            ]);
+
+            $this->selectedInvoiceId = $invoice->id;
+            $this->editingInvoiceId = null;
+            $this->screen = 'detail';
+            $this->refreshInvoices();
+            Flux::toast(variant: 'success', text: __('Invoice updated successfully.'));
+            return;
+        }
+
         // Run the GenerateInvoiceWorkflow!
         $payload = \App\Brain\Invoices\Workflows\GenerateInvoiceWorkflow::run([
             'companyId' => auth()->user()->company->id,
@@ -323,6 +365,38 @@ new class extends Component
         $this->screen = 'detail';
         $this->refreshInvoices();
         Flux::toast(variant: 'success', text: __('Invoice created successfully.'));
+    }
+
+    public function editInvoice(): void
+    {
+        $invoice = auth()->user()->company->invoices()->with('items')->findOrFail($this->selectedInvoiceId);
+
+        $this->editingInvoiceId = $invoice->id;
+        $this->selectedCustomerId = $invoice->customer_id;
+        $this->notes = $invoice->notes ?? '';
+        $this->invoiceDate = $invoice->date->format('Y-m-d');
+        $this->dueDate = $invoice->due_date ? $invoice->due_date->format('Y-m-d') : '';
+
+        $this->loadPendingServices();
+
+        // Check the boxes for the services already in this invoice
+        $this->selectedServiceIds = $invoice->items()
+            ->whereNotNull('service_instance_id')
+            ->pluck('service_instance_id')
+            ->toArray();
+
+        $this->screen = 'select_services';
+    }
+
+    public function backFromSelectServices(): void
+    {
+        if ($this->editingInvoiceId) {
+            $this->screen = 'detail';
+            $this->selectedInvoiceId = $this->editingInvoiceId;
+            $this->editingInvoiceId = null;
+        } else {
+            $this->screen = 'select_customer';
+        }
     }
 
     public function showInvoice(int $id): void
@@ -705,7 +779,7 @@ new class extends Component
     @if($screen === 'select_services')
         <header class="flex items-center justify-between px-4 sm:px-0">
             <div class="flex items-center gap-3">
-                <flux:button wire:click="$set('screen', 'select_customer')" variant="ghost" icon="chevron-left" size="sm" class="rounded-full" />
+                <flux:button wire:click="backFromSelectServices" variant="ghost" icon="chevron-left" size="sm" class="rounded-full" />
                 <div>
                     <h1 class="text-xl font-bold text-zinc-900 dark:text-white">{{ Customer::find($selectedCustomerId)->name }}</h1>
                     <p class="text-xs text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">{{ __('Step 2: Select Services') }}</p>
@@ -819,6 +893,7 @@ new class extends Component
 
                 <div class="flex flex-wrap items-center gap-2">
                     @if($inv->status === 'draft')
+                        <flux:button wire:click="editInvoice" variant="outline" icon="pencil">{{ __('Edit Invoice') }}</flux:button>
                         <flux:button wire:click="issueInvoice" variant="primary" icon="check">{{ __('Issue Invoice') }}</flux:button>
                     @else
                         <flux:button wire:click="checkBeforeSendEmail" variant="outline" icon="paper-airplane">{{ __('Send by Email') }}</flux:button>
