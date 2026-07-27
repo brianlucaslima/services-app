@@ -21,7 +21,7 @@
 {{ $quote->notes }}
 @endif
 
-{{ __('If you have any questions about this quote, please do not hesitate to contact us.') }}
+{{ __('If you have any questions about this quote, please do not hesitate to contact us.') }} {{ $invoice->company->email }}
 
 {{ __('Thanks,') }}<br>
 **{{ $quote->company->name }}**
