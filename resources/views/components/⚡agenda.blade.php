@@ -432,9 +432,15 @@ new class extends Component
         @foreach($this->days as $day)
             @php $hasServices = count($day['services']) > 0; @endphp
             <div class="flex flex-col min-h-[200px] bg-white dark:bg-zinc-900 border {{ $day['is_today'] ? 'border-zinc-900 dark:border-white ring-1 ring-zinc-900 dark:ring-white' : 'border-zinc-200 dark:border-zinc-700' }} rounded-xl overflow-hidden shadow-sm">
-                <div class="p-3 {{ $day['is_today'] ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-900' : 'bg-zinc-50 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300' }} border-b border-zinc-200 dark:border-zinc-700 text-center">
+                <div class="p-3 {{ $day['is_today'] ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-900' : 'bg-zinc-50 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300' }} border-b border-zinc-200 dark:border-zinc-700 text-center relative">
                     <p class="text-xs font-bold uppercase tracking-wider">{{ $day['date']->translatedFormat('D') }}</p>
                     <p class="text-lg font-semibold">{{ $day['date']->format('d') }}</p>
+                    @php $dayHours = collect($day['services'])->where('status', '!=', 'skipped')->sum('duration'); @endphp
+                    @if($dayHours > 0)
+                        <span class="absolute top-1.5 right-2 text-[10px] font-bold px-1.5 py-0.5 rounded-full {{ $day['is_today'] ? 'bg-white/20 text-white dark:bg-zinc-900/10 dark:text-zinc-900' : 'bg-zinc-200 text-zinc-700 dark:bg-zinc-700 dark:text-zinc-300' }}">
+                            {{ number_format($dayHours, 1) }}h
+                        </span>
+                    @endif
                 </div>
 
                 <div class="flex-1 p-2 space-y-2">
