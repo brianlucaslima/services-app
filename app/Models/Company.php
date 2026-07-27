@@ -52,6 +52,11 @@ class Company extends Model
         return $this->hasMany(Invoice::class);
     }
 
+    public function quotes(): HasMany
+    {
+        return $this->hasMany(Quote::class);
+    }
+
     public function serviceTypes(): HasMany
     {
         return $this->hasMany(ServiceType::class);

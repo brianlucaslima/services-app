@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Brain\Queries\GetCollaboratorPayoutsQuery;
 use App\Models\Invoice;
+use App\Models\Quote;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Support\Carbon;
 
@@ -66,6 +67,29 @@ class PdfController extends Controller
         ]);
 
         $fileName = strtolower($invoice->number).($invoice->status === 'draft' ? '-draft' : '').'.pdf';
+
+        return $pdf->download($fileName);
+    }
+
+    /**
+     * Gera e baixa o PDF do orçamento (quote).
+     */
+    public function quote(int $id)
+    {
+        app()->setLocale('en'); // Garante que o PDF saia sempre em inglês
+
+        $quote = Quote::with(['customer', 'company', 'items'])->findOrFail($id);
+
+        // Acesso seguro: o orçamento deve pertencer à empresa do usuário logado
+        if ($quote->company_id !== auth()->user()->company->id) {
+            abort(403);
+        }
+
+        $pdf = Pdf::loadView('pdf.quote', [
+            'quote' => $quote,
+        ]);
+
+        $fileName = strtolower($quote->number).($quote->status === 'draft' ? '-draft' : '').'.pdf';
 
         return $pdf->download($fileName);
     }

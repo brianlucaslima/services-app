@@ -26,6 +26,10 @@
                             {{ __('Invoices') }}
                         </flux:sidebar.item>
 
+                        <flux:sidebar.item icon="document-text" :href="route('quotes')" :current="request()->routeIs('quotes')" wire:navigate>
+                            {{ __('Quotes & Estimates') }}
+                        </flux:sidebar.item>
+
                         <flux:sidebar.item icon="briefcase" :href="route('service-types')" :current="request()->routeIs('service-types')" wire:navigate>
                             {{ __('Services') }}
                         </flux:sidebar.item>
