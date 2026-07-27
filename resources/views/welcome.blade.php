@@ -154,14 +154,14 @@
                         📍
                     </div>
                     @if(app()->getLocale() === 'pt_BR')
-                        <h3 class="text-lg font-bold text-zinc-900 dark:text-white">Múltiplos Locais de Serviço</h3>
+                        <h3 class="text-lg font-bold text-zinc-900 dark:text-white">Locais e Calendários Dinâmicos</h3>
                         <p class="text-sm text-zinc-500 dark:text-zinc-400 leading-relaxed">
-                            Cada cliente pode ter múltiplos locais de serviço (Casa, Escritório). Controle de forma independente a duração, o preço por hora, data de início e de fim para cada local.
+                            Cada cliente pode ter múltiplos locais de serviço. Gerencie e crie calendários e categorias de locais customizados (Residencial, Comercial, Industrial, etc.) e defina taxas horárias de equipe personalizadas de acordo com cada tipo.
                         </p>
                     @else
-                        <h3 class="text-lg font-bold text-zinc-900 dark:text-white">Multi-Location Customer Booking</h3>
+                        <h3 class="text-lg font-bold text-zinc-900 dark:text-white">Multi-Location & Dynamic Calendars</h3>
                         <p class="text-sm text-zinc-500 dark:text-zinc-400 leading-relaxed">
-                            Each customer can have multiple service addresses (House, Office). Manage duration, hourly rates, start, and end dates independently for each location.
+                            Each customer can have multiple service addresses. Manage and create custom calendar categories (House, Office, Industrial, etc.) and configure specific collaborator hourly rates dynamically for each calendar type.
                         </p>
                     @endif
                 </div>
@@ -190,14 +190,14 @@
                         🧾
                     </div>
                     @if(app()->getLocale() === 'pt_BR')
-                        <h3 class="text-lg font-bold text-zinc-900 dark:text-white">Faturamento & PDF Lifecycle</h3>
+                        <h3 class="text-lg font-bold text-zinc-900 dark:text-white">Cotações, Faturas & PDF Lifecycle</h3>
                         <p class="text-sm text-zinc-500 dark:text-zinc-400 leading-relaxed">
-                            Gere faturas profissionais em libras a partir dos serviços confirmados. Baixe rascunhos com marca d'água "DRAFT", emita a fatura oficial, envie por e-mail e marque pagamentos recebidos de forma simples.
+                            Monte cotações profissionais detalhadas com anotações por item, envie-as por e-mail e converta-as em faturas com um clique. Baixe rascunhos de faturas, envie documentos finais com o e-mail da sua empresa em destaque e controle pagamentos recebidos de forma simples.
                         </p>
                     @else
-                        <h3 class="text-lg font-bold text-zinc-900 dark:text-white">Billing & PDF Lifecycle</h3>
+                        <h3 class="text-lg font-bold text-zinc-900 dark:text-white">Quotes, Invoices & PDF Lifecycle</h3>
                         <p class="text-sm text-zinc-500 dark:text-zinc-400 leading-relaxed">
-                            Generate professional invoices in British Pounds from completed services. Download draft PDFs with watermarks, issue official documents, send by email, and track paid status easily.
+                            Create detailed professional quotes and estimates with per-item notes, send them by email, and convert them to invoice drafts with a single click. Download draft invoices, send final documents with your company email highlighted, and easily track paid status.
                         </p>
                     @endif
                 </div>

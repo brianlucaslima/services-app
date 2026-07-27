@@ -3,7 +3,7 @@
 [![Laravel Version](https://img.shields.io/badge/laravel-v13-red.svg)](https://laravel.com)
 [![Livewire Version](https://img.shields.io/badge/livewire-v4-blue.svg)](https://livewire.laravel.com)
 [![Tailwind Version](https://img.shields.io/badge/tailwindcss-v4-cyan.svg)](https://tailwindcss.com)
-[![Pest Tests](https://img.shields.io/badge/tests-91%20passing-emerald.svg)](https://pestphp.com)
+[![Pest Tests](https://img.shields.io/badge/tests-100%20passing-emerald.svg)](https://pestphp.com)
 [![Style Standard](https://img.shields.io/badge/code%20style-pint-purple.svg)](https://github.com/laravel/pint)
 
 **Invoease** is a modern, enterprise-grade, bilingual B2B SaaS platform specifically designed for local service businesses in the United Kingdom (e.g., cleaning companies, gardening services, property maintenance, home care, and tradespeople) to seamlessly manage customers, schedule team members, and automate invoicing and payouts.
@@ -18,17 +18,29 @@
 * **Management Dashboard:** A birds-eye view of financial metrics (Monthly Revenue, Pending Payouts, Active Customers, Completed Services), recent invoices list, recent service activities, and a monthly top collaborators leaderboard.
 * **Collaborator Dashboard:** Simplified and private workspace displaying personal hours worked, monthly earnings, pending payouts, and assigned schedules.
 
-### 2. Smart Scheduling & Weekly Agenda
+### 2. Quotes & Estimates Management (Full Screen)
+* **Visual Form Builder:** A clean full-screen layout to build professional quotes with dynamic item additions, customized notes fields per row, and automatic rate filling.
+* **One-Click Invoice Conversion:** Lets managers convert accepted quotes to rascunho (draft) invoices instantly, automatically duplicating items and notes, with secure UUID parameter redirection.
+* **Origin Banner Warning:** The generated invoice clearly displays a high-visibility badge: `"Generated from Quote Q0001 on DD/MM/YYYY"` to retain absolute financial traceability.
+
+### 3. Smart Scheduling & Weekly Agenda
 * **Recurrence Management:** Schedule services weekly, fortnightly, monthly, or as one-offs.
 * **Smart Ocurrences:** Support completing occurrences with notes, rescheduling to custom days/times, or skipping individual occurrences for the week (e.g. holidays).
 * **Assigned Teams:** Multi-selection of collaborators on both recurring and manual services with easy checkbox interfaces.
+* **Agenda Calendars Filter:** Dynamically filters both schedules and overridden instance cards in the agenda by custom calendar categories.
 
-### 3. One-Click Invoice Generation
+### 4. Dynamic Calendars & Customizable Multi-Rates
+* **Unlimited Calendar Categories:** Move beyond hardcoded types to manage unlimited dynamic Calendars (e.g., Residential, Commercial, Industrial, Home Cleaning) per company.
+* **Collaborator Multi-Rates:** Configures dynamic collaborator hourly rates per calendar, rendering dynamic inputs in the team registration form.
+* **Auto-Prefilled Settings:** New companies automatically receive 'House' and 'Office' categories seeded, with all legacy data preserved and converted flawlessly.
+
+### 5. One-Click Invoice Generation
 * **Sequential Numbering:** Automatically increments invoice numbers based on the business's custom "Last Invoice Number" setting, eliminating database COUNT dependency.
 * **Auto-Calculated Totals:** Merges completed service instances, calculates team shares, and generates clean, sequentially numbered PDF Invoices.
 * **Manual Services:** Easily add manual/one-off items to an invoice, with automatic rate updating based on the selected service location's rate.
+* **Draft Editing on Reselection:** Allows editing of any draft invoice by going back directly to the select services screen, pre-filling selected checkboxes and notes dynamically.
 
-### 4. Payouts & Team Financials
+### 6. Payouts & Team Financials
 * **Share-Based Calculations:** Automatically splits service hours among assigned team members and calculates individual payouts based on their custom hourly rates.
 * **Payout Reports:** Generates professional PDF payout reports for collaborators for any custom date range.
 * **Batch Payments:** Lets managers review detailed service logs and mark outstanding collaborator payouts as "Paid" in bulk.
@@ -105,7 +117,7 @@ Ensure you have **PHP 8.3+** and **Composer** installed.
 
 ## 🧪 Test Suite
 
-The platform includes **91 robust Pest integration tests** covering 100% of the Livewire components, workflows, security middleware, and email logging system.
+The platform includes **100 robust Pest integration tests** covering 100% of the Livewire components, workflows, security middleware, and email logging system.
 
 To run the entire test suite:
 ```bash
