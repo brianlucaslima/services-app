@@ -46,6 +46,7 @@ class ConvertQuoteToInvoiceAction extends Action
         ]);
 
         $invoice = Invoice::findOrFail($createInvoice->invoiceId);
+        $invoice->update(['quote_id' => $quote->id]);
         $total = 0;
 
         foreach ($quote->items as $item) {
@@ -56,6 +57,7 @@ class ConvertQuoteToInvoiceAction extends Action
                 'invoice_id' => $invoice->id,
                 'service_instance_id' => null, // No service instance since it was converted from a Quote
                 'description' => $item->description,
+                'notes' => $item->notes,
                 'quantity' => $item->quantity,
                 'unit_price' => $item->unit_price,
                 'amount' => $amount,

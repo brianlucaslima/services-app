@@ -63,6 +63,17 @@ new class extends Component
         $this->invoiceDate = now()->format('Y-m-d');
         $this->dueDate = now()->addDays(14)->format('Y-m-d');
         $this->manualDate = now()->format('Y-m-d');
+
+        // Check if an invoice secure UUID is passed as query string to show detail screen immediately
+        $uuid = request()->query('uuid');
+        if ($uuid) {
+            $invoice = auth()->user()->company->invoices()->where('uuid', $uuid)->first();
+            if ($invoice) {
+                $this->selectedInvoiceId = $invoice->id;
+                $this->screen = 'detail';
+            }
+        }
+
         $this->refreshInvoices();
         $this->refreshEmailLogs();
     }
@@ -955,7 +966,12 @@ new class extends Component
                                 <tbody class="divide-y divide-zinc-100 dark:divide-zinc-800">
                                     @foreach($inv->items as $item)
                                         <tr>
-                                            <td class="px-3 py-3 font-semibold dark:text-zinc-200">{{ $item->description }}</td>
+                                            <td class="px-3 py-3 font-semibold dark:text-zinc-200">
+                                                {{ $item->description }}
+                                                @if($item->notes)
+                                                    <div class="text-[10px] text-zinc-500 font-normal mt-1 italic whitespace-pre-wrap">{{ $item->notes }}</div>
+                                                @endif
+                                            </td>
                                             <td class="px-3 py-3 text-right text-zinc-600 dark:text-zinc-400">{{ number_format($item->quantity, 2) }}h</td>
                                             <td class="px-3 py-3 text-right text-zinc-500">{{ Number::currency($item->unit_price, 'GBP') }}</td>
                                             <td class="px-3 py-3 text-right font-bold text-zinc-950 dark:text-white">{{ Number::currency($item->amount, 'GBP') }}</td>

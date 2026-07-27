@@ -73,9 +73,14 @@ class CreateInvoiceItemsAction extends Action
             $itemDescription .= ' ('.$datesString.')';
 
             $totalHours = 0;
+            $notesArray = [];
             foreach ($group['services'] as $service) {
                 $totalHours += (float) $service->duration_hours;
+                if (! empty($service->notes)) {
+                    $notesArray[] = $service->notes;
+                }
             }
+            $itemNotes = ! empty($notesArray) ? implode("\n", array_unique($notesArray)) : null;
 
             $amount = $totalHours * $group['hourly_rate'];
             $total += $amount;
@@ -87,6 +92,7 @@ class CreateInvoiceItemsAction extends Action
                 'invoice_id' => $invoice->id,
                 'service_instance_id' => $firstService->id,
                 'description' => $itemDescription,
+                'notes' => $itemNotes,
                 'quantity' => $totalHours,
                 'unit_price' => $group['hourly_rate'],
                 'amount' => $amount,

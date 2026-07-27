@@ -16,6 +16,7 @@ test('save quote workflow creates quote and quote items correctly', function () 
         'user_id' => $user->id,
         'name' => 'Quotes R Us',
         'email' => 'quotes@example.com',
+        'quote_start_number' => 10,
     ]);
     $user->update(['company_id' => $company->id]);
 
@@ -36,12 +37,14 @@ test('save quote workflow creates quote and quote items correctly', function () 
             [
                 'service_type_id' => null,
                 'description' => 'Card tricks basic performance',
+                'notes' => 'Perform standard card tricks close-up',
                 'quantity' => 2.00,
                 'unit_price' => 100.00,
             ],
             [
                 'service_type_id' => null,
                 'description' => 'Levitation illusion grand finale',
+                'notes' => 'Levitate assistant 5 feet in air',
                 'quantity' => 1.00,
                 'unit_price' => 500.00,
             ],
@@ -53,9 +56,12 @@ test('save quote workflow creates quote and quote items correctly', function () 
 
     $quote = Quote::with('items')->find($payload->quoteId);
     expect($quote)->not->toBeNull()
-        ->and($quote->number)->toBe('Q0001')
+        ->and($quote->number)->toBe('Q0011') // 10 + 1 = 11, padded to 4 digits with Q prefix
         ->and($quote->total_amount)->toBe('700.00')
         ->and($quote->notes)->toBe('Magical services estimate');
+
+    // 4. Assert company start number was updated
+    expect($company->fresh()->quote_start_number)->toBe(11);
 
     expect($quote->items->count())->toBe(2);
 
@@ -63,6 +69,7 @@ test('save quote workflow creates quote and quote items correctly', function () 
     expect($item1)->not->toBeNull()
         ->and($item1->quantity)->toBe('2.00')
         ->and($item1->unit_price)->toBe('100.00')
+        ->and($item1->notes)->toBe('Perform standard card tricks close-up')
         ->and($item1->amount)->toBe('200.00');
 });
 
@@ -161,4 +168,82 @@ test('quotes livewire component works correctly for management users', function 
         ->assertHasNoErrors();
 
     expect(Quote::find($quote->id))->toBeNull();
+
+    // Test conversion and secure UUID redirect
+    $quoteToConvert = Quote::create([
+        'company_id' => $company->id,
+        'customer_id' => $customer->id,
+        'number' => 'Q0043',
+        'date' => now(),
+        'expiry_date' => now()->addDays(10),
+        'status' => 'draft',
+        'total_amount' => 500.00,
+    ]);
+
+    Livewire::test('quotes')
+        ->call('convertToInvoice', $quoteToConvert->id)
+        ->assertRedirect();
+});
+
+test('cannot modify, delete or convert quote if there is an active invoice', function () {
+    // 1. Setup
+    $user = User::factory()->create([
+        'role' => 'management',
+    ]);
+    $company = Company::create([
+        'user_id' => $user->id,
+        'name' => 'Quotes R Us',
+        'email' => 'quotes@example.com',
+    ]);
+    $user->update(['company_id' => $company->id]);
+
+    $customer = Customer::create([
+        'company_id' => $company->id,
+        'name' => 'David Copperfield',
+        'email' => 'david@magic.com',
+    ]);
+
+    $quote = Quote::create([
+        'company_id' => $company->id,
+        'customer_id' => $customer->id,
+        'number' => 'Q0055',
+        'date' => now(),
+        'expiry_date' => now()->addDays(10),
+        'status' => 'accepted',
+        'total_amount' => 500.00,
+    ]);
+
+    // Create an active invoice associated with this quote
+    $invoice = Invoice::create([
+        'company_id' => $company->id,
+        'customer_id' => $customer->id,
+        'quote_id' => $quote->id,
+        'number' => '0001',
+        'date' => now(),
+        'due_date' => now()->addDays(14),
+        'status' => 'draft',
+        'total_amount' => 500.00,
+    ]);
+
+    $this->actingAs($user);
+
+    // 2. Test that editing, deleting, changing status, or converting is blocked
+    Livewire::test('quotes')
+        ->call('changeStatus', $quote->id, 'declined')
+        ->call('delete', $quote->id)
+        ->call('convertToInvoice', $quote->id);
+
+    expect($quote->fresh()->status)->toBe('accepted'); // Status untouched
+
+    // 3. Mark the invoice as cancelled
+    $invoice->update(['status' => 'cancelled']);
+
+    // 4. Test that actions are now allowed
+    Livewire::test('quotes')
+        ->call('changeStatus', $quote->id, 'declined')
+        ->assertHasNoErrors()
+        ->call('delete', $quote->id)
+        ->assertHasNoErrors();
+
+    expect(Quote::find($quote->id))->toBeNull(); // Successfully deleted!
 });

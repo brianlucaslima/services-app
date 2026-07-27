@@ -208,6 +208,9 @@
                 <tr>
                     <td>
                         <span class="font-semibold" style="font-size: 13px; color: #18181b;">{{ $item->description }}</span>
+                        @if($item->notes)
+                            <div style="font-size: 10px; color: #71717a; margin-top: 4px; font-style: italic; white-space: pre-wrap;">{{ $item->notes }}</div>
+                        @endif
                     </td>
                     <td class="text-right font-medium text-zinc-700">
                         {{ number_format($item->quantity, 2) }}h

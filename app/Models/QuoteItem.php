@@ -11,6 +11,7 @@ class QuoteItem extends Model
         'quote_id',
         'service_type_id',
         'description',
+        'notes',
         'quantity',
         'unit_price',
         'amount',

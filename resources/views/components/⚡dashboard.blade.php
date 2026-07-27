@@ -107,7 +107,7 @@ new class extends Component
                     <h3 class="text-2xl font-bold text-zinc-900 dark:text-white mt-1">{{ Number::currency($this->metrics['monthlyRevenue'], 'GBP') }}</h3>
                 </div>
                 <div class="text-xs text-emerald-600 dark:text-emerald-400 font-medium">
-                    {{ __('Invoiced in :month', ['month' => now()->format('F')]) }}
+                    {{ __('Invoiced in :month', ['month' => now()->translatedFormat('F')]) }}
                 </div>
                 <div class="absolute right-4 top-4 text-emerald-500/20">
                     <svg class="w-8 h-8" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
@@ -164,7 +164,7 @@ new class extends Component
                     <h3 class="text-2xl font-bold text-zinc-900 dark:text-white mt-1">{{ number_format($this->metrics['completedHours'], 2) }}h</h3>
                 </div>
                 <div class="text-xs text-emerald-600 dark:text-emerald-400 font-medium">
-                    {{ __('Completed hours in :month', ['month' => now()->format('F')]) }}
+                    {{ __('Completed hours in :month', ['month' => now()->translatedFormat('F')]) }}
                 </div>
                 <div class="absolute right-4 top-4 text-emerald-500/20">
                     <svg class="w-8 h-8" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>

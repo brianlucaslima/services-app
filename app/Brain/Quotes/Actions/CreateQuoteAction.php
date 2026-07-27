@@ -38,6 +38,9 @@ class CreateQuoteAction extends Action
 
         if ($this->quoteId) {
             $quote = Quote::findOrFail($this->quoteId);
+            if ($quote->hasActiveInvoice()) {
+                abort(403, __('Cannot update a quote that has an active invoice associated with it.'));
+            }
             $quote->update([
                 'customer_id' => $this->customerId,
                 'date' => $this->quoteDate,
@@ -46,8 +49,7 @@ class CreateQuoteAction extends Action
             ]);
         } else {
             // Find the last quote number or generate a new one
-            $lastQuote = Quote::where('company_id', $company->id)->latest('id')->first();
-            $lastNum = $lastQuote ? (int) filter_var($lastQuote->number, FILTER_SANITIZE_NUMBER_INT) : 0;
+            $lastNum = $company->quote_start_number ?? 0;
             $nextNum = $lastNum + 1;
 
             // Safety loop to prevent duplicate quote numbers
@@ -58,6 +60,9 @@ class CreateQuoteAction extends Action
                     $nextNum++;
                 }
             } while ($exists);
+
+            // Update company's last quote number
+            $company->update(['quote_start_number' => $nextNum]);
 
             $quote = Quote::create([
                 'company_id' => $company->id,

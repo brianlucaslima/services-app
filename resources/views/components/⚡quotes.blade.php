@@ -13,8 +13,8 @@ use Barryvdh\DomPDF\Facade\Pdf;
 
 new class extends Component
 {
-    public array $quotes = [];
-    public bool $showModal = false;
+    public $quotes = [];
+    public string $screen = 'list'; // 'list', 'form'
 
     // Quote Form State
     public ?int $quoteId = null;
@@ -61,7 +61,7 @@ new class extends Component
             $query->where('number', 'like', "%{$this->filterNumber}%");
         }
 
-        $this->quotes = $query->latest()->get()->toArray();
+        $this->quotes = $query->latest()->get();
     }
 
     #[Computed]
@@ -76,14 +76,15 @@ new class extends Component
         return auth()->user()->company->serviceTypes()->orderBy('name')->get();
     }
 
-    public function openCreateModal(): void
+    public function openCreateForm(): void
     {
         $this->resetForm();
         $this->addItem(); // Start with at least one item row
-        $this->showModal = true;
+        $this->notes = auth()->user()->company->default_quote_message ?? '';
+        $this->screen = 'form';
     }
 
-    public function openEditModal(int $id): void
+    public function openEditForm(int $id): void
     {
         $this->resetForm();
         $quote = auth()->user()->company->quotes()->with('items')->findOrFail($id);
@@ -98,12 +99,13 @@ new class extends Component
             $this->items[] = [
                 'service_type_id' => $item->service_type_id,
                 'description' => $item->description,
+                'notes' => $item->notes ?? '',
                 'quantity' => (float) $item->quantity,
                 'unit_price' => (float) $item->unit_price,
             ];
         }
 
-        $this->showModal = true;
+        $this->screen = 'form';
     }
 
     public function addItem(): void
@@ -111,6 +113,7 @@ new class extends Component
         $this->items[] = [
             'service_type_id' => '',
             'description' => '',
+            'notes' => '',
             'quantity' => 1,
             'unit_price' => 0.00,
         ];
@@ -137,6 +140,8 @@ new class extends Component
                     // Try to guess default price or keep 0
                     $this->items[$index]['unit_price'] = 25.00; // Sensible default
                 }
+            } else {
+                $this->items[$index]['description'] = '';
             }
         }
     }
@@ -149,6 +154,7 @@ new class extends Component
             'expiryDate' => 'required|date|after_or_equal:quoteDate',
             'items' => 'required|array|min:1',
             'items.*.description' => 'required|string|max:255',
+            'items.*.notes' => 'nullable|string',
             'items.*.quantity' => 'required|numeric|min:0.01',
             'items.*.unit_price' => 'required|numeric|min:0',
         ]);
@@ -169,7 +175,7 @@ new class extends Component
             Flux::toast(variant: 'success', text: __('Quote created successfully.'));
         }
 
-        $this->showModal = false;
+        $this->screen = 'list';
         $this->refreshQuotes();
         $this->resetForm();
     }
@@ -207,24 +213,47 @@ new class extends Component
     public function changeStatus(int $id, string $status): void
     {
         $quote = auth()->user()->company->quotes()->findOrFail($id);
+
+        if ($quote->hasActiveInvoice()) {
+            Flux::toast(variant: 'danger', text: __('Cannot change the status of a quote with an active invoice.'));
+            return;
+        }
+
         $quote->update(['status' => $status]);
         Flux::toast(variant: 'success', text: __('Quote status updated to :status.', ['status' => __($status)]));
         $this->refreshQuotes();
     }
 
-    public function convertToInvoice(int $id): void
+    public function convertToInvoice(int $id)
     {
+        $quote = auth()->user()->company->quotes()->findOrFail($id);
+
+        if ($quote->hasActiveInvoice()) {
+            Flux::toast(variant: 'danger', text: __('This quote already has an active invoice.'));
+            return;
+        }
+
         $action = \App\Brain\Quotes\Actions\ConvertQuoteToInvoiceAction::run([
             'quoteId' => $id,
         ]);
 
+        $invoice = \App\Models\Invoice::findOrFail($action->invoiceId);
+
         Flux::toast(variant: 'success', text: __('Quote successfully converted to Invoice draft!'));
-        $this->refreshQuotes();
+        
+        return $this->redirect(route('invoices', ['uuid' => $invoice->uuid]), navigate: true);
     }
 
     public function delete(int $id): void
     {
-        auth()->user()->company->quotes()->findOrFail($id)->delete();
+        $quote = auth()->user()->company->quotes()->findOrFail($id);
+
+        if ($quote->hasActiveInvoice()) {
+            Flux::toast(variant: 'danger', text: __('Cannot delete a quote with an active invoice.'));
+            return;
+        }
+
+        $quote->delete();
         Flux::toast(variant: 'success', text: __('Quote deleted successfully.'));
         $this->refreshQuotes();
     }
@@ -243,143 +272,153 @@ new class extends Component
 ?>
 
 <div class="mx-auto max-w-5xl space-y-6 pb-24">
-    <header class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between sm:px-0">
-        <div>
-            <h1 class="text-2xl font-semibold text-zinc-900 dark:text-white">{{ __('Quotes & Estimates') }}</h1>
-            <p class="text-sm text-zinc-500 dark:text-zinc-400">{{ __('Create and manage estimates for your customers.') }}</p>
-        </div>
-        <flux:button wire:click="openCreateModal" variant="primary" icon="plus" class="rounded-full">
-            {{ __('Add Quote') }}
-        </flux:button>
-    </header>
-
-    <!-- Filters Section -->
-    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 p-4 bg-zinc-50 dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800">
-        <flux:field>
-            <flux:label>{{ __('Customer') }}</flux:label>
-            <flux:select wire:model.live="filterCustomer">
-                <flux:select.option value="all">{{ __('All Customers') }}</flux:select.option>
-                @foreach($this->customers as $cust)
-                    <flux:select.option value="{{ $cust->id }}">{{ $cust->name }}</flux:select.option>
-                @endforeach
-            </flux:select>
-        </flux:field>
-
-        <flux:field>
-            <flux:label>{{ __('Status') }}</flux:label>
-            <flux:select wire:model.live="filterStatus">
-                <flux:select.option value="all">{{ __('All Statuses') }}</flux:select.option>
-                <flux:select.option value="draft">{{ __('Draft') }}</flux:select.option>
-                <flux:select.option value="sent">{{ __('Sent') }}</flux:select.option>
-                <flux:select.option value="accepted">{{ __('Accepted') }}</flux:select.option>
-                <flux:select.option value="declined">{{ __('Declined') }}</flux:select.option>
-                <flux:select.option value="expired">{{ __('Expired') }}</flux:select.option>
-            </flux:select>
-        </flux:field>
-
-        <flux:field>
-            <flux:label>{{ __('Quote Number') }}</flux:label>
-            <flux:input wire:model.live.debounce.300ms="filterNumber" type="search" placeholder="{{ __('Search Quote #...') }}" />
-        </flux:field>
-    </div>
-
-    <!-- Table Section -->
-    <div class="bg-white dark:bg-zinc-900 border-y sm:border border-zinc-200 dark:border-zinc-700 sm:rounded-xl overflow-hidden shadow-sm">
-        <flux:table>
-            <flux:table.columns>
-                <flux:table.column>{{ __('Number') }}</flux:table.column>
-                <flux:table.column>{{ __('Customer') }}</flux:table.column>
-                <flux:table.column>{{ __('Date') }}</flux:table.column>
-                <flux:table.column>{{ __('Valid Until') }}</flux:table.column>
-                <flux:table.column>{{ __('Amount') }}</flux:table.column>
-                <flux:table.column>{{ __('Status') }}</flux:table.column>
-                <flux:table.column></flux:table.column>
-            </flux:table.columns>
-
-            <flux:table.rows>
-                @foreach($quotes as $q)
-                    <flux:table.row :key="$q['id']">
-                        <flux:table.cell class="font-bold text-zinc-900 dark:text-white">
-                            {{ $q['number'] }}
-                        </flux:table.cell>
-                        <flux:table.cell>
-                            <span class="block font-medium text-zinc-900 dark:text-white">{{ $q['customer']['name'] ?? 'N/A' }}</span>
-                            <span class="block text-xs text-zinc-500">{{ $q['customer']['email'] ?? '' }}</span>
-                        </flux:table.cell>
-                        <flux:table.cell>
-                            {{ \Carbon\Carbon::parse($q['date'])->format('d/m/Y') }}
-                        </flux:table.cell>
-                        <flux:table.cell>
-                            {{ \Carbon\Carbon::parse($q['expiry_date'])->format('d/m/Y') }}
-                        </flux:table.cell>
-                        <flux:table.cell class="font-bold">
-                            {{ Number::currency($q['total_amount'], 'GBP') }}
-                        </flux:table.cell>
-                        <flux:table.cell>
-                            @php
-                                $badgeColor = match($q['status']) {
-                                    'accepted' => 'green',
-                                    'declined' => 'red',
-                                    'sent' => 'blue',
-                                    'expired' => 'yellow',
-                                    default => 'zinc',
-                                };
-                            @endphp
-                            <flux:badge :color="$badgeColor" size="sm" class="uppercase">
-                                {{ __($q['status']) }}
-                            </flux:badge>
-                        </flux:table.cell>
-                        <flux:table.cell>
-                            <flux:dropdown align="end">
-                                <flux:button variant="ghost" size="xs" icon="ellipsis-horizontal" />
-                                <flux:menu>
-                                    <flux:menu.item icon="pencil" wire:click="openEditModal({{ $q['id'] }})">{{ __('Edit') }}</flux:menu.item>
-                                    <flux:menu.item icon="arrow-down-tray" href="{{ route('quotes.pdf', ['id' => $q['id']]) }}" target="_blank">{{ __('Download PDF') }}</flux:menu.item>
-                                    
-                                    @if($q['customer']['email'] ?? null)
-                                        <flux:menu.item icon="paper-airplane" wire:click="sendQuoteEmail({{ $q['id'] }})">{{ __('Send by Email') }}</flux:menu.item>
-                                    @endif
-
-                                    @if($q['status'] !== 'accepted')
-                                        <flux:menu.item icon="check" wire:click="changeStatus({{ $q['id'] }}, 'accepted')">{{ __('Mark as Accepted') }}</flux:menu.item>
-                                    @endif
-                                    @if($q['status'] !== 'declined')
-                                        <flux:menu.item icon="x-mark" wire:click="changeStatus({{ $q['id'] }}, 'declined')">{{ __('Mark as Declined') }}</flux:menu.item>
-                                    @endif
-
-                                    @if($q['status'] === 'accepted')
-                                        <flux:menu.separator />
-                                        <flux:menu.item icon="document-duplicate" class="font-semibold text-green-600 dark:text-green-400" wire:click="convertToInvoice({{ $q['id'] }})">
-                                            {{ __('Convert to Invoice') }}
-                                        </flux:menu.item>
-                                    @endif
-
-                                    <flux:menu.separator />
-                                    <flux:menu.item icon="trash" variant="danger" wire:click="delete({{ $q['id'] }})">{{ __('Delete') }}</flux:menu.item>
-                                </flux:menu>
-                            </flux:dropdown>
-                        </flux:table.cell>
-                    </flux:table.row>
-                @endforeach
-            </flux:table.rows>
-        </flux:table>
-
-        @if(count($quotes) === 0)
-            <div class="p-12 text-center text-zinc-500 dark:text-zinc-400">
-                <flux:icon.document class="w-12 h-12 mx-auto mb-4 opacity-20" />
-                <p>{{ __('No quotes found.') }}</p>
-            </div>
-        @endif
-    </div>
-
-    <!-- Modal Form -->
-    <flux:modal wire:model="showModal" class="md:w-[600px]">
-        <form wire:submit="save" class="space-y-6">
+    @if($screen === 'list')
+        <header class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between sm:px-0">
             <div>
-                <flux:heading size="lg">{{ $quoteId ? __('Edit Quote') : __('Add Quote') }}</flux:heading>
-                <flux:subheading>{{ __('Configure your quote details and line items.') }}</flux:subheading>
+                <h1 class="text-2xl font-semibold text-zinc-900 dark:text-white">{{ __('Quotes & Estimates') }}</h1>
+                <p class="text-sm text-zinc-500 dark:text-zinc-400">{{ __('Create and manage estimates for your customers.') }}</p>
             </div>
+            <flux:button wire:click="openCreateForm" variant="primary" icon="plus" class="rounded-full">
+                {{ __('Add Quote') }}
+            </flux:button>
+        </header>
 
+        <!-- Filters Section -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 p-4 bg-zinc-50 dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800">
+            <flux:field>
+                <flux:label>{{ __('Customer') }}</flux:label>
+                <flux:select wire:model.live="filterCustomer">
+                    <flux:select.option value="all">{{ __('All Customers') }}</flux:select.option>
+                    @foreach($this->customers as $cust)
+                        <flux:select.option value="{{ $cust->id }}">{{ $cust->name }}</flux:select.option>
+                    @endforeach
+                </flux:select>
+            </flux:field>
+
+            <flux:field>
+                <flux:label>{{ __('Status') }}</flux:label>
+                <flux:select wire:model.live="filterStatus">
+                    <flux:select.option value="all">{{ __('All Statuses') }}</flux:select.option>
+                    <flux:select.option value="draft">{{ __('Draft') }}</flux:select.option>
+                    <flux:select.option value="sent">{{ __('Sent') }}</flux:select.option>
+                    <flux:select.option value="accepted">{{ __('Accepted') }}</flux:select.option>
+                    <flux:select.option value="declined">{{ __('Declined') }}</flux:select.option>
+                    <flux:select.option value="expired">{{ __('Expired') }}</flux:select.option>
+                </flux:select>
+            </flux:field>
+
+            <flux:field>
+                <flux:label>{{ __('Quote Number') }}</flux:label>
+                <flux:input wire:model.live.debounce.300ms="filterNumber" type="search" placeholder="{{ __('Search Quote #...') }}" />
+            </flux:field>
+        </div>
+
+        <!-- Table Section -->
+        <div class="bg-white dark:bg-zinc-900 border-y sm:border border-zinc-200 dark:border-zinc-700 sm:rounded-xl overflow-hidden shadow-sm">
+            <flux:table>
+                <flux:table.columns>
+                    <flux:table.column>{{ __('Number') }}</flux:table.column>
+                    <flux:table.column>{{ __('Customer') }}</flux:table.column>
+                    <flux:table.column>{{ __('Date') }}</flux:table.column>
+                    <flux:table.column>{{ __('Valid Until') }}</flux:table.column>
+                    <flux:table.column>{{ __('Amount') }}</flux:table.column>
+                    <flux:table.column>{{ __('Status') }}</flux:table.column>
+                    <flux:table.column></flux:table.column>
+                </flux:table.columns>
+
+                <flux:table.rows>
+                    @foreach($quotes as $q)
+                        <flux:table.row :key="$q->id">
+                            <flux:table.cell class="font-bold text-zinc-900 dark:text-white">
+                                {{ $q->number }}
+                            </flux:table.cell>
+                            <flux:table.cell>
+                                <span class="block font-medium text-zinc-900 dark:text-white">{{ $q->customer->name ?? 'N/A' }}</span>
+                                <span class="block text-xs text-zinc-500">{{ $q->customer->email ?? '' }}</span>
+                            </flux:table.cell>
+                            <flux:table.cell>
+                                {{ $q->date->format('d/m/Y') }}
+                            </flux:table.cell>
+                            <flux:table.cell>
+                                {{ $q->expiry_date->format('d/m/Y') }}
+                            </flux:table.cell>
+                            <flux:table.cell class="font-bold">
+                                {{ Number::currency($q->total_amount, 'GBP') }}
+                            </flux:table.cell>
+                            <flux:table.cell>
+                                @php
+                                    $badgeColor = match($q->status) {
+                                        'accepted' => 'green',
+                                        'declined' => 'red',
+                                        'sent' => 'blue',
+                                        'expired' => 'yellow',
+                                        default => 'zinc',
+                                    };
+                                @endphp
+                                <flux:badge :color="$badgeColor" size="sm" class="uppercase">
+                                    {{ __($q->status) }}
+                                </flux:badge>
+                            </flux:table.cell>
+                            <flux:table.cell>
+                                <flux:dropdown align="end">
+                                    <flux:button variant="ghost" size="xs" icon="ellipsis-horizontal" />
+                                    <flux:menu>
+                                        @if(!$q->hasActiveInvoice())
+                                            <flux:menu.item icon="pencil" wire:click="openEditForm({{ $q->id }})">{{ __('Edit') }}</flux:menu.item>
+                                        @endif
+                                        <flux:menu.item icon="arrow-down-tray" href="{{ route('quotes.pdf', ['id' => $q->id]) }}" target="_blank">{{ __('Download PDF') }}</flux:menu.item>
+                                        
+                                        @if($q->customer->email ?? null)
+                                            <flux:menu.item icon="paper-airplane" wire:click="sendQuoteEmail({{ $q->id }})">{{ __('Send by Email') }}</flux:menu.item>
+                                        @endif
+
+                                        @if(!$q->hasActiveInvoice())
+                                            @if($q->status !== 'accepted')
+                                                <flux:menu.item icon="check" wire:click="changeStatus({{ $q->id }}, 'accepted')">{{ __('Mark as Accepted') }}</flux:menu.item>
+                                            @endif
+                                            @if($q->status !== 'declined')
+                                                <flux:menu.item icon="x-mark" wire:click="changeStatus({{ $q->id }}, 'declined')">{{ __('Mark as Declined') }}</flux:menu.item>
+                                            @endif
+                                        @endif
+
+                                        @if($q->status === 'accepted' && !$q->hasActiveInvoice())
+                                            <flux:menu.separator />
+                                            <flux:menu.item icon="document-duplicate" class="font-semibold text-green-600 dark:text-green-400" wire:click="convertToInvoice({{ $q->id }})">
+                                                {{ __('Convert to Invoice') }}
+                                            </flux:menu.item>
+                                        @endif
+
+                                        @if(!$q->hasActiveInvoice())
+                                            <flux:menu.separator />
+                                            <flux:menu.item icon="trash" variant="danger" wire:click="delete({{ $q->id }})">{{ __('Delete') }}</flux:menu.item>
+                                        @endif
+                                    </flux:menu>
+                                </flux:dropdown>
+                            </flux:table.cell>
+                        </flux:table.row>
+                    @endforeach
+                </flux:table.rows>
+            </flux:table>
+
+            @if(count($quotes) === 0)
+                <div class="p-12 text-center text-zinc-500 dark:text-zinc-400">
+                    <flux:icon.document class="w-12 h-12 mx-auto mb-4 opacity-20" />
+                    <p>{{ __('No quotes found.') }}</p>
+                </div>
+            @endif
+        </div>
+    @endif
+
+    @if($screen === 'form')
+        <header class="flex items-center gap-3 px-4 sm:px-0">
+            <flux:button wire:click="$set('screen', 'list')" variant="ghost" icon="chevron-left" size="sm" class="rounded-full" />
+            <div>
+                <h1 class="text-2xl font-semibold text-zinc-900 dark:text-white">{{ $quoteId ? __('Edit Quote') : __('Add Quote') }}</h1>
+                <p class="text-sm text-zinc-500 dark:text-zinc-400">{{ __('Configure your quote details and line items.') }}</p>
+            </div>
+        </header>
+
+        <form wire:submit="save" class="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-2xl p-6 shadow-sm space-y-6">
             <div class="space-y-4">
                 <flux:field>
                     <flux:label>{{ __('Customer') }}</flux:label>
@@ -420,51 +459,67 @@ new class extends Component
                         </flux:button>
                     </div>
 
-                    <div class="space-y-4 max-h-72 overflow-y-auto pr-1">
+                    <div class="space-y-4">
                         @foreach($items as $idx => $item)
-                            <div class="grid grid-cols-12 gap-3 items-end border border-zinc-100 dark:border-zinc-800 p-3 rounded-xl relative" :key="'item-'.$idx">
-                                <div class="col-span-12 sm:col-span-5">
-                                    <flux:field>
-                                        <flux:label>{{ __('Service Type / Name') }}</flux:label>
-                                        <flux:select wire:model="items.{{ $idx }}.service_type_id">
-                                            <flux:select.option value="">{{ __('Custom Item / Service...') }}</flux:select.option>
-                                            @foreach($this->serviceTypes as $st)
-                                                <flux:select.option value="{{ $st->id }}">{{ $st->name }}</flux:select.option>
-                                            @endforeach
-                                        </flux:select>
-                                    </flux:field>
+                            <div class="border border-zinc-200 dark:border-zinc-800 p-5 rounded-2xl relative space-y-4 bg-zinc-50/50 dark:bg-zinc-950/20 shadow-xs" :key="'item-'.$idx">
+                                <div class="grid grid-cols-12 gap-4 items-end">
+                                    <!-- Service Type Select -->
+                                    <div class="col-span-12 {{ empty($item['service_type_id']) ? 'md:col-span-3' : 'md:col-span-6' }} transition-all duration-200">
+                                        <flux:field>
+                                            <flux:label>{{ __('Service Type') }}</flux:label>
+                                            <flux:select wire:model.live="items.{{ $idx }}.service_type_id">
+                                                <flux:select.option value="">{{ __('Custom Item / Service...') }}</flux:select.option>
+                                                @foreach($this->serviceTypes as $st)
+                                                    <flux:select.option value="{{ $st->id }}">{{ $st->name }}</flux:select.option>
+                                                @endforeach
+                                            </flux:select>
+                                        </flux:field>
+                                    </div>
+
+                                    <!-- Service Name Input (only shown if Custom Item is selected) -->
+                                    @if(empty($item['service_type_id']))
+                                        <div class="col-span-12 md:col-span-3 transition-all duration-200">
+                                            <flux:field>
+                                                <flux:label>{{ __('Service') }}</flux:label>
+                                                <flux:input wire:model="items.{{ $idx }}.description" required />
+                                            </flux:field>
+                                        </div>
+                                    @endif
+
+                                    <!-- Hours / Quantity -->
+                                    <div class="col-span-4 md:col-span-2">
+                                        <flux:field>
+                                            <flux:label>{{ __('Hours/Qty') }}</flux:label>
+                                            <flux:input type="number" step="0.01" wire:model.live="items.{{ $idx }}.quantity" required />
+                                        </flux:field>
+                                    </div>
+
+                                    <!-- Unit Price -->
+                                    <div class="col-span-4 md:col-span-2">
+                                        <flux:field>
+                                            <flux:label>{{ __('Unit Price') }}</flux:label>
+                                            <flux:input type="number" step="0.01" wire:model.live="items.{{ $idx }}.unit_price" icon="banknotes" required />
+                                        </flux:field>
+                                    </div>
+
+                                    <!-- Total Sum Display -->
+                                    <div class="col-span-4 md:col-span-2 text-right pr-2 pb-2">
+                                        <span class="block text-xs text-zinc-500 uppercase font-semibold">{{ __('Total') }}</span>
+                                        <span class="block text-base font-bold text-zinc-950 dark:text-white mt-1">
+                                            {{ Number::currency(((float)($item['quantity'] ?? 0)) * ((float)($item['unit_price'] ?? 0)), 'GBP') }}
+                                        </span>
+                                    </div>
                                 </div>
 
-                                <div class="col-span-12 sm:col-span-7">
+                                <div class="grid grid-cols-1 gap-3">
                                     <flux:field>
-                                        <flux:label>{{ __('Description') }}</flux:label>
-                                        <flux:input wire:model="items.{{ $idx }}.description" required />
+                                        <flux:label>{{ __('Item Details / Notes') }}</flux:label>
+                                        <flux:textarea wire:model="items.{{ $idx }}.notes" placeholder="{{ __('Provide complete long details for this specific service item...') }}" rows="1" />
                                     </flux:field>
-                                </div>
-
-                                <div class="col-span-4 sm:col-span-3">
-                                    <flux:field>
-                                        <flux:label>{{ __('Hours/Qty') }}</flux:label>
-                                        <flux:input type="number" step="0.01" wire:model.live="items.{{ $idx }}.quantity" required />
-                                    </flux:field>
-                                </div>
-
-                                <div class="col-span-5 sm:col-span-4">
-                                    <flux:field>
-                                        <flux:label>{{ __('Unit Price') }}</flux:label>
-                                        <flux:input type="number" step="0.01" wire:model.live="items.{{ $idx }}.unit_price" icon="banknotes" required />
-                                    </flux:field>
-                                </div>
-
-                                <div class="col-span-3 sm:col-span-4 text-right pr-2">
-                                    <span class="block text-xs text-zinc-500 uppercase">{{ __('Total') }}</span>
-                                    <span class="block font-bold text-zinc-950 dark:text-white mt-1">
-                                        {{ Number::currency(((float)($item['quantity'] ?? 0)) * ((float)($item['unit_price'] ?? 0)), 'GBP') }}
-                                    </span>
                                 </div>
 
                                 @if(count($items) > 1)
-                                    <button type="button" wire:click="removeItem({{ $idx }})" class="absolute top-2 right-2 text-zinc-400 hover:text-red-500 transition">
+                                    <button type="button" wire:click="removeItem({{ $idx }})" class="absolute top-3 right-3 text-zinc-450 hover:text-red-500 dark:text-zinc-500 dark:hover:text-red-400 transition p-1 rounded-full hover:bg-zinc-200/50 dark:hover:bg-zinc-800/50">
                                         <flux:icon.x-mark class="w-4 h-4" />
                                     </button>
                                 @endif
@@ -476,9 +531,9 @@ new class extends Component
 
             <div class="flex gap-2">
                 <flux:spacer />
-                <flux:button wire:click="$set('showModal', false)" variant="ghost">{{ __('Cancel') }}</flux:button>
+                <flux:button wire:click="$set('screen', 'list')" variant="ghost">{{ __('Cancel') }}</flux:button>
                 <flux:button type="submit" variant="primary">{{ __('Save') }}</flux:button>
             </div>
         </form>
-    </flux:modal>
+    @endif
 </div>

@@ -5,12 +5,15 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Str;
 
 class Invoice extends Model
 {
     protected $fillable = [
         'company_id',
         'customer_id',
+        'quote_id',
+        'uuid',
         'number',
         'date',
         'due_date',
@@ -24,6 +27,18 @@ class Invoice extends Model
         'due_date' => 'date',
         'total_amount' => 'decimal:2',
     ];
+
+    protected static function booted()
+    {
+        static::creating(function ($invoice) {
+            $invoice->uuid = (string) Str::uuid();
+        });
+    }
+
+    public function quote(): BelongsTo
+    {
+        return $this->belongsTo(Quote::class);
+    }
 
     public function company(): BelongsTo
     {

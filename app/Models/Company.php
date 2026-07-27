@@ -20,8 +20,10 @@ class Company extends Model
         'payment_account_number',
         'payment_sort_code',
         'default_invoice_message',
+        'default_quote_message',
         'primary_color',
         'invoice_start_number',
+        'quote_start_number',
         'subscription_status',
         'subscription_ends_at',
     ];

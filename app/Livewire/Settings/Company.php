@@ -29,11 +29,15 @@ class Company extends Component
 
     public $default_invoice_message = '';
 
+    public $default_quote_message = '';
+
     public $logo;
 
     public $primary_color = '#18181b';
 
     public $invoice_start_number = 1;
+
+    public $quote_start_number = 0;
 
     public function mount(): void
     {
@@ -50,8 +54,10 @@ class Company extends Component
         $this->payment_account_number = $this->company->payment_account_number;
         $this->payment_sort_code = $this->company->payment_sort_code;
         $this->default_invoice_message = $this->company->default_invoice_message;
+        $this->default_quote_message = $this->company->default_quote_message;
         $this->primary_color = $this->company->primary_color ?? '#18181b';
         $this->invoice_start_number = $this->company->invoice_start_number ?? 1;
+        $this->quote_start_number = $this->company->quote_start_number ?? 0;
     }
 
     public function save(): void
@@ -65,9 +71,11 @@ class Company extends Component
             'payment_account_number' => 'nullable|string|max:255',
             'payment_sort_code' => 'nullable|string|max:255',
             'default_invoice_message' => 'nullable|string',
+            'default_quote_message' => 'nullable|string',
             'logo' => 'nullable|image|max:1024',
             'primary_color' => 'required|string|max:10',
             'invoice_start_number' => 'required|integer|min:0',
+            'quote_start_number' => 'required|integer|min:0',
         ]);
 
         if ($this->logo) {

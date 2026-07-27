@@ -50,6 +50,12 @@
                 <flux:input type="number" wire:model="invoice_start_number" min="0" />
                 <flux:error name="invoice_start_number" />
             </flux:field>
+
+            <flux:field>
+                <flux:label>{{ __('Last Quote Number') }}</flux:label>
+                <flux:input type="number" wire:model="quote_start_number" min="0" />
+                <flux:error name="quote_start_number" />
+            </flux:field>
         </div>
 
         <flux:separator />
@@ -85,6 +91,12 @@
             <flux:label>{{ __('Default Invoice Message') }}</flux:label>
             <flux:textarea wire:model="default_invoice_message" placeholder="{{ __('e.g. Thank you for your business!') }}" />
             <flux:error name="default_invoice_message" />
+        </flux:field>
+
+        <flux:field>
+            <flux:label>{{ __('Default Quote Message') }}</flux:label>
+            <flux:textarea wire:model="default_quote_message" placeholder="{{ __('e.g. Please find our custom estimate for the requested services!') }}" />
+            <flux:error name="default_quote_message" />
         </flux:field>
 
         <div class="flex items-center gap-4">

@@ -174,6 +174,10 @@
         <div class="clearfix"></div>
     </div>
 
+    <div style="text-align: center; margin-top: 10px; margin-bottom: 25px; font-weight: bold; font-size: 14px; color: #ef4444; text-transform: uppercase; letter-spacing: 1.5px;">
+        {{ __('This is not a VAT invoice') }}
+    </div>
+
     <table>
         <thead>
             <tr>
@@ -188,6 +192,9 @@
                 <tr>
                     <td>
                         <span class="font-semibold" style="font-size: 13px; color: #18181b;">{{ $item->description }}</span>
+                        @if($item->notes)
+                            <div style="font-size: 10px; color: #71717a; margin-top: 4px; font-style: italic; white-space: pre-wrap;">{{ $item->notes }}</div>
+                        @endif
                     </td>
                     <td class="text-right font-medium text-zinc-700">
                         {{ number_format($item->quantity, 2) }}
@@ -219,7 +226,7 @@
             <table class="totals-table">
                 @if($quote->expiry_date)
                     <tr>
-                        <td style="text-align: left; color: #71717a; padding: 4px 0;">{{ __('Valid Until') }}</td>
+                        <td style="text-align: left; color: #71717a; padding: 4px 0;">{{ __('Due Date') }}</td>
                         <td class="text-right font-semibold" style="padding: 4px 0; color: #111;">{{ $quote->expiry_date->format('d/m/Y') }}</td>
                     </tr>
                 @endif

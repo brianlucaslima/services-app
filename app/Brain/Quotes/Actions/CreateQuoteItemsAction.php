@@ -22,6 +22,7 @@ class CreateQuoteItemsAction extends Action
             'quoteId' => 'required|exists:quotes,id',
             'items' => 'required|array|min:1',
             'items.*.description' => 'required|string|max:255',
+            'items.*.notes' => 'nullable|string',
             'items.*.quantity' => 'required|numeric|min:0.01',
             'items.*.unit_price' => 'required|numeric|min:0',
         ];
@@ -42,8 +43,9 @@ class CreateQuoteItemsAction extends Action
 
             QuoteItem::create([
                 'quote_id' => $quote->id,
-                'service_type_id' => $item['service_type_id'] ?? null,
+                'service_type_id' => ! empty($item['service_type_id']) ? $item['service_type_id'] : null,
                 'description' => $item['description'],
+                'notes' => $item['notes'] ?? null,
                 'quantity' => $item['quantity'],
                 'unit_price' => $item['unit_price'],
                 'amount' => $amount,

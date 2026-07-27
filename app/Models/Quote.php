@@ -39,4 +39,14 @@ class Quote extends Model
     {
         return $this->hasMany(QuoteItem::class);
     }
+
+    public function invoices(): HasMany
+    {
+        return $this->hasMany(Invoice::class);
+    }
+
+    public function hasActiveInvoice(): bool
+    {
+        return $this->invoices()->where('status', '!=', 'cancelled')->exists();
+    }
 }

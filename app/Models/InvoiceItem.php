@@ -11,6 +11,7 @@ class InvoiceItem extends Model
         'invoice_id',
         'service_instance_id',
         'description',
+        'notes',
         'quantity',
         'unit_price',
         'amount',
