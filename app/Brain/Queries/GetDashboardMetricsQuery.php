@@ -37,6 +37,9 @@ class GetDashboardMetricsQuery extends Query
 
             $pendingPayout = 0;
             foreach ($instances as $inst) {
+                if (($inst->billing_type ?? 'hourly') !== 'hourly') {
+                    continue;
+                }
                 $teamCount = $inst->users->count() ?: 1;
                 $shareHours = $inst->duration_hours / $teamCount;
                 foreach ($inst->users as $u) {
@@ -79,11 +82,12 @@ class GetDashboardMetricsQuery extends Query
         $completedHours = 0;
         $earningsThisMonth = 0;
         foreach ($collabInstancesThisMonth as $inst) {
+            if (($inst->billing_type ?? 'hourly') !== 'hourly') {
+                continue;
+            }
             $teamCount = $inst->users->count() ?: 1;
             $shareHours = $inst->duration_hours / $teamCount;
-            if (($inst->billing_type ?? 'hourly') === 'hourly') {
-                $completedHours += $shareHours;
-            }
+            $completedHours += $shareHours;
             $earningsThisMonth += $collab->hourlyRateFor($inst->address?->type) * $shareHours;
         }
 
@@ -97,6 +101,9 @@ class GetDashboardMetricsQuery extends Query
 
         $pendingPayout = 0;
         foreach ($unpaidInstances as $inst) {
+            if (($inst->billing_type ?? 'hourly') !== 'hourly') {
+                continue;
+            }
             $teamCount = $inst->users->count() ?: 1;
             $pendingPayout += $collab->hourlyRateFor($inst->address?->type) * ($inst->duration_hours / $teamCount);
         }
