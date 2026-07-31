@@ -67,6 +67,22 @@ new class extends Component
 
         Flux::toast(variant: 'danger', text: __('Subscription suspended.'));
     }
+
+    public function loginAsCompanyOwner(int $companyId): mixed
+    {
+        $company = Company::findOrFail($companyId);
+        
+        if (!$company->user_id) {
+            Flux::toast(variant: 'danger', text: __('Company has no master user associated.'));
+            return null;
+        }
+
+        // Login as the company owner using Laravel's loginUsingId
+        auth()->loginUsingId($company->user_id);
+
+        // Redirect to the dashboard!
+        return redirect()->route('dashboard');
+    }
 };
 
 ?>
@@ -133,6 +149,9 @@ new class extends Component
                         </flux:table.cell>
                         <flux:table.cell class="text-right">
                             <div class="flex items-center justify-end gap-1.5">
+                                <flux:button wire:click="loginAsCompanyOwner({{ $company->id }})" variant="outline" size="xs" icon="arrow-right-start-on-rectangle" title="{{ __('Login as Owner') }}">
+                                    {{ __('Login') }}
+                                </flux:button>
                                 <flux:button wire:click="extend30Days({{ $company->id }})" variant="outline" size="xs" icon="plus" title="{{ __('Add 30 Days') }}">
                                     +30 {{ __('Days') }}
                                 </flux:button>
