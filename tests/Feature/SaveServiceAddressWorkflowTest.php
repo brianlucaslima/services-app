@@ -60,6 +60,7 @@ test('save service address workflow creates address, saves schedules, and syncs 
         'durationHours' => 4.00,
         'hourlyRate' => 22.50,
         'calendarId' => $officeCalendar->id,
+        'billingType' => 'hourly',
         'schedules' => [$scheduleData],
     ]);
 

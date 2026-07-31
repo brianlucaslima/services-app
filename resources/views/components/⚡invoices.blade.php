@@ -35,6 +35,7 @@ new class extends Component
     public $dueDate;
     public $notes = '';
     public string $customerSearch = '';
+    public string $filterAddressId = 'all';
 
     // List Filters state
     public string $filterCustomer = 'all';
@@ -50,6 +51,7 @@ new class extends Component
     public $manualDate;
     public $manualHours = 1;
     public $manualRate = 0;
+    public string $manualBillingType = 'hourly';
     public array $manualUserIds = [];
     public $manualAddressId = null;
     public ?int $editingServiceInstanceId = null;
@@ -141,6 +143,7 @@ new class extends Component
     public function updatedFilterEndDate(): void { $this->refreshInvoices(); }
     public function updatedFilterNumber(): void { $this->refreshInvoices(); }
     public function updatedFilterStatus(): void { $this->refreshInvoices(); }
+    public function updatedFilterAddressId(): void { $this->loadPendingServices(); }
 
     public function clearFilters(): void
     {
@@ -158,6 +161,7 @@ new class extends Component
         $this->notes = '';
         $this->customerSearch = '';
         $this->editingInvoiceId = null;
+        $this->filterAddressId = 'all';
         $this->screen = 'list'; // To trigger state cleanup
         $this->screen = 'select_customer';
     }
@@ -165,6 +169,7 @@ new class extends Component
     public function selectCustomer(int $id): void
     {
         $this->selectedCustomerId = $id;
+        $this->filterAddressId = 'all';
         $this->loadPendingServices();
         $this->notes = auth()->user()->company->default_invoice_message ?? '';
         $this->screen = 'select_services';
@@ -176,6 +181,10 @@ new class extends Component
             ->where('company_id', auth()->user()->company->id)
             ->where('status', 'completed')
             ->where('customer_id', $this->selectedCustomerId);
+
+        if ($this->filterAddressId !== 'all') {
+            $query->where('service_address_id', $this->filterAddressId);
+        }
 
         if ($this->editingInvoiceId) {
             $query->where(function($q) {
@@ -195,6 +204,7 @@ new class extends Component
                 'hours' => $item->duration_hours,
                 'rate' => $item->hourly_rate,
                 'total' => $item->duration_hours * $item->hourly_rate,
+                'billing_type' => $item->billing_type ?? 'hourly',
             ])
             ->toArray();
 
@@ -214,7 +224,22 @@ new class extends Component
 
             if ($address) {
                 $this->manualRate = $address->hourly_rate;
+                $this->manualBillingType = $address->billing_type ?? 'hourly';
+                if ($this->manualBillingType === 'hourly') {
+                    $this->manualHours = \App\Brain\Helpers\TimeHelper::decimalToColon($address->duration_hours);
+                } else {
+                    $this->manualHours = (float) $address->duration_hours;
+                }
             }
+        }
+    }
+
+    public function updatedManualBillingType($value): void
+    {
+        if ($value === 'hourly') {
+            $this->manualHours = \App\Brain\Helpers\TimeHelper::decimalToColon($this->manualHours);
+        } else {
+            $this->manualHours = \App\Brain\Helpers\TimeHelper::humanToDecimal($this->manualHours);
         }
     }
 
@@ -223,14 +248,24 @@ new class extends Component
         $this->manualServiceTypeId = null;
         $this->manualDescription = '';
         $this->manualHours = 1;
+        $this->manualRate = 0;
+        $this->manualDate = now()->format('Y-m-d');
+        $this->manualBillingType = 'hourly';
         $this->manualUserIds = [];
         $this->manualAddressId = null;
         $this->editingServiceInstanceId = null;
         // Try to get the rate from the customer's first address if possible
         $customer = auth()->user()->company->customers()->with('addresses')->find($this->selectedCustomerId);
         if ($customer && $customer->addresses->isNotEmpty()) {
-            $this->manualRate = $customer->addresses->first()->hourly_rate;
-            $this->manualAddressId = $customer->addresses->first()->id;
+            $firstAddress = $customer->addresses->first();
+            $this->manualRate = $firstAddress->hourly_rate;
+            $this->manualAddressId = $firstAddress->id;
+            $this->manualBillingType = $firstAddress->billing_type ?? 'hourly';
+            if ($this->manualBillingType === 'hourly') {
+                $this->manualHours = \App\Brain\Helpers\TimeHelper::decimalToColon($firstAddress->duration_hours);
+            } else {
+                $this->manualHours = (float) $firstAddress->duration_hours;
+            }
         }
 
         $this->showManualModal = true;
@@ -244,7 +279,12 @@ new class extends Component
         $this->manualServiceTypeId = $instance->service_type_id;
         $this->manualDescription = $instance->description;
         $this->manualDate = $instance->date->format('Y-m-d');
-        $this->manualHours = (float) $instance->duration_hours;
+        $this->manualBillingType = $instance->billing_type ?? 'hourly';
+        if ($this->manualBillingType === 'hourly') {
+            $this->manualHours = \App\Brain\Helpers\TimeHelper::decimalToColon($instance->duration_hours);
+        } else {
+            $this->manualHours = (float) $instance->duration_hours;
+        }
         $this->manualRate = (float) $instance->hourly_rate;
         $this->manualAddressId = $instance->service_address_id;
         $this->manualUserIds = $instance->users->pluck('id')->toArray();
@@ -266,6 +306,13 @@ new class extends Component
 
     public function saveManualService(): void
     {
+        // Parse the manualHours format (handles formats like "2:30" or "2.5")
+        if ($this->manualBillingType === 'hourly') {
+            $this->manualHours = \App\Brain\Helpers\TimeHelper::humanToDecimal($this->manualHours);
+        } else {
+            $this->manualHours = (float) $this->manualHours;
+        }
+
         $this->validate([
             'manualDate' => 'required|date',
             'manualHours' => 'required|numeric|min:0',
@@ -297,6 +344,7 @@ new class extends Component
                 'date' => $this->manualDate,
                 'duration_hours' => $this->manualHours,
                 'hourly_rate' => $this->manualRate,
+                'billing_type' => $this->manualBillingType,
             ]);
 
             Flux::toast(variant: 'success', text: __('Service updated successfully.'));
@@ -313,6 +361,7 @@ new class extends Component
                 'duration_hours' => $this->manualHours,
                 'hourly_rate' => $this->manualRate,
                 'status' => 'completed',
+                'billing_type' => $this->manualBillingType,
             ]);
 
             Flux::toast(variant: 'success', text: __('Manual service added.'));
@@ -388,6 +437,7 @@ new class extends Component
         $this->invoiceDate = $invoice->date->format('Y-m-d');
         $this->dueDate = $invoice->due_date ? $invoice->due_date->format('Y-m-d') : '';
 
+        $this->filterAddressId = 'all';
         $this->loadPendingServices();
 
         // Check the boxes for the services already in this invoice
@@ -569,15 +619,79 @@ new class extends Component
     }
 
     #[Computed]
+    public function customerAddresses()
+    {
+        if (!$this->selectedCustomerId) {
+            return collect();
+        }
+        return auth()->user()->company->customers()
+            ->find($this->selectedCustomerId)
+            ?->addresses()
+            ->get() ?? collect();
+    }
+
+    #[Computed]
     public function serviceTypes()
     {
         return auth()->user()->company->serviceTypes()->orderBy('name')->get();
     }
 
+    public function removeCollaborator(int $invoiceItemId, int $userId): void
+    {
+        $item = InvoiceItem::with('invoice.company')->findOrFail($invoiceItemId);
+
+        if ($item->invoice->company_id !== auth()->user()->company->id) {
+            abort(403);
+        }
+
+        $instance = $item->serviceInstance;
+
+        if ($instance) {
+            $instance->users()->detach($userId);
+        }
+
+        unset($this->selectedInvoice);
+        Flux::toast(variant: 'success', text: __('Collaborator removed from service.'));
+    }
+
+    public function addCollaborator(int $invoiceItemId, int $userId): void
+    {
+        $item = InvoiceItem::with('invoice.company')->findOrFail($invoiceItemId);
+
+        if ($item->invoice->company_id !== auth()->user()->company->id) {
+            abort(403);
+        }
+
+        $instance = $item->serviceInstance;
+
+        if (!$instance) {
+            // Create a new ServiceInstance to associate with this InvoiceItem!
+            $instance = ServiceInstance::create([
+                'company_id' => $item->invoice->company_id,
+                'customer_id' => $item->invoice->customer_id,
+                'description' => $item->description,
+                'date' => $item->invoice->date ?? now(),
+                'time' => '12:00:00',
+                'duration_hours' => $item->quantity,
+                'hourly_rate' => $item->unit_price,
+                'status' => 'completed',
+                'billing_type' => $item->billing_type ?? 'hourly',
+            ]);
+
+            // Link the invoice item to this new service instance
+            $item->update(['service_instance_id' => $instance->id]);
+        }
+
+        $instance->users()->attach($userId);
+
+        unset($this->selectedInvoice);
+        Flux::toast(variant: 'success', text: __('Collaborator added to service.'));
+    }
+
     #[Computed]
     public function selectedInvoice()
     {
-        return $this->selectedInvoiceId ? auth()->user()->company->invoices()->with(['customer', 'items', 'quote'])->find($this->selectedInvoiceId) : null;
+        return $this->selectedInvoiceId ? auth()->user()->company->invoices()->with(['customer', 'items.serviceInstance.users', 'quote'])->find($this->selectedInvoiceId) : null;
     }
 };
 
@@ -800,6 +914,18 @@ new class extends Component
         </header>
 
         <div class="space-y-6">
+            <div class="flex flex-col sm:flex-row gap-4 items-end justify-between px-4 sm:px-0">
+                <flux:field class="w-full sm:w-72">
+                    <flux:label>{{ __('Filter by Location') }}</flux:label>
+                    <flux:select wire:model.live="filterAddressId" placeholder="{{ __('All Locations') }}">
+                        <flux:select.option value="all">{{ __('All Locations') }}</flux:select.option>
+                        @foreach($this->customerAddresses as $addr)
+                            <flux:select.option value="{{ $addr->id }}">{{ $addr->label }} ({{ $addr->address }})</flux:select.option>
+                        @endforeach
+                    </flux:select>
+                </flux:field>
+            </div>
+
             <div class="bg-white dark:bg-zinc-900 border-y sm:border border-zinc-200 dark:border-zinc-700 sm:rounded-2xl overflow-hidden">
                 <table class="w-full text-sm text-left">
                     <thead class="bg-zinc-50 dark:bg-zinc-800 text-zinc-500 uppercase text-[10px] tracking-wider">
@@ -830,7 +956,14 @@ new class extends Component
                                 </td>
                                 <td class="px-4 py-4">
                                     <p class="font-medium text-zinc-900 dark:text-white">{{ $service['description'] }}</p>
-                                    <p class="text-xs text-zinc-500">{{ $service['date'] }} • {{ $service['hours'] }}h</p>
+                                    <p class="text-xs text-zinc-500">
+                                        {{ $service['date'] }} • 
+                                        @if(($service['billing_type'] ?? 'hourly') === 'hourly')
+                                            {{ \App\Brain\Helpers\TimeHelper::decimalToColon($service['hours']) }}h
+                                        @else
+                                            {{ (float) $service['hours'] }} {{ (float) $service['hours'] === 1.0 ? __('unit') : __('units') }}
+                                        @endif
+                                    </p>
                                 </td>
                                 <td class="px-4 py-4 text-right font-semibold text-zinc-900 dark:text-white">
                                     {{ Number::currency($service['total'], 'GBP') }}
@@ -970,8 +1103,8 @@ new class extends Component
                                 <thead class="bg-zinc-50 dark:bg-zinc-800 text-zinc-500 uppercase">
                                     <tr>
                                         <th class="px-3 py-2">{{ __('Description') }}</th>
-                                        <th class="px-3 py-2 text-right">{{ __('Hours') }}</th>
-                                        <th class="px-3 py-2 text-right">{{ __('Price/Hour') }}</th>
+                                        <th class="px-3 py-2 text-right">{{ __('Hours/Qty') }}</th>
+                                        <th class="px-3 py-2 text-right">{{ __('Rate') }}</th>
                                         <th class="px-3 py-2 text-right">{{ __('Amount') }}</th>
                                     </tr>
                                 </thead>
@@ -983,8 +1116,56 @@ new class extends Component
                                                 @if($item->notes)
                                                     <div class="text-[10px] text-zinc-500 font-normal mt-1 italic whitespace-pre-wrap">{{ $item->notes }}</div>
                                                 @endif
+
+                                                @if(($item->billing_type ?? 'hourly') === 'hourly')
+                                                    <div class="mt-2 flex flex-wrap gap-1.5 items-center">
+                                                        <span class="text-[10px] text-zinc-400 dark:text-zinc-500 mr-0.5 font-normal">{{ __('Collaborators:') }}</span>
+                                                        @if($item->serviceInstance)
+                                                            @foreach($item->serviceInstance->users as $user)
+                                                                <span class="inline-flex items-center gap-1 bg-zinc-100 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200 text-[10px] px-2 py-0.5 rounded-full font-medium">
+                                                                    {{ $user->name }}
+                                                                    <button type="button" 
+                                                                            wire:click="removeCollaborator({{ $item->id }}, {{ $user->id }})" 
+                                                                            class="hover:text-red-600 focus:outline-none focus:text-red-600 ml-0.5 cursor-pointer"
+                                                                            title="{{ __('Remove collaborator') }}">
+                                                                        <flux:icon.x-mark class="w-3 h-3" />
+                                                                    </button>
+                                                                </span>
+                                                            @endforeach
+                                                        @endif
+
+                                                        <!-- Add Collaborator Dropdown -->
+                                                        <flux:dropdown align="start" class="inline-block">
+                                                            <button type="button" class="inline-flex items-center gap-1 text-[10px] text-zinc-500 hover:text-zinc-900 dark:hover:text-white border border-dashed border-zinc-300 dark:border-zinc-700 rounded-full px-2 py-0.5 font-medium transition focus:outline-none cursor-pointer">
+                                                                <flux:icon.plus class="w-2.5 h-2.5" />
+                                                                <span>{{ __('Add') }}</span>
+                                                            </button>
+                                                            <flux:menu>
+                                                                @php
+                                                                    $assignedIds = $item->serviceInstance ? $item->serviceInstance->users->pluck('id')->toArray() : [];
+                                                                    $availableCollabs = $this->collaborators->whereNotIn('id', $assignedIds);
+                                                                @endphp
+                                                                @forelse($availableCollabs as $collab)
+                                                                    <flux:menu.item wire:click="addCollaborator({{ $item->id }}, {{ $collab->id }})">
+                                                                        {{ $collab->name }}
+                                                                    </flux:menu.item>
+                                                                @empty
+                                                                    <div class="px-3 py-1.5 text-xs text-zinc-400 italic">
+                                                                        {{ __('No other collaborators') }}
+                                                                    </div>
+                                                                @endforelse
+                                                            </flux:menu>
+                                                        </flux:dropdown>
+                                                    </div>
+                                                @endif
                                             </td>
-                                            <td class="px-3 py-3 text-right text-zinc-600 dark:text-zinc-400">{{ number_format($item->quantity, 2) }}h</td>
+                                            <td class="px-3 py-3 text-right text-zinc-600 dark:text-zinc-400">
+                                                @if(($item->billing_type ?? 'hourly') === 'hourly')
+                                                    {{ \App\Brain\Helpers\TimeHelper::decimalToColon($item->quantity) }}h
+                                                @else
+                                                    {{ number_format($item->quantity, 2) }}
+                                                @endif
+                                            </td>
                                             <td class="px-3 py-3 text-right text-zinc-500">{{ Number::currency($item->unit_price, 'GBP') }}</td>
                                             <td class="px-3 py-3 text-right font-bold text-zinc-950 dark:text-white">{{ Number::currency($item->amount, 'GBP') }}</td>
                                         </tr>
@@ -1120,13 +1301,25 @@ new class extends Component
                     </div>
                 </flux:field>
 
+                <flux:field>
+                    <flux:label>{{ __('Billing Type') }}</flux:label>
+                    <flux:select wire:model.live="manualBillingType" required>
+                        <flux:select.option value="hourly">{{ __('Hourly') }}</flux:select.option>
+                        <flux:select.option value="unit">{{ __('Unit') }}</flux:select.option>
+                    </flux:select>
+                </flux:field>
+
                 <div class="grid grid-cols-2 gap-4">
                     <flux:field>
-                        <flux:label>{{ __('Hours') }}</flux:label>
-                        <flux:input type="number" step="0.01" wire:model="manualHours" required />
+                        <flux:label>{{ $manualBillingType === 'hourly' ? __('Hours') : __('Quantity') }}</flux:label>
+                        @if($manualBillingType === 'hourly')
+                            <flux:input type="time" wire:model="manualHours" placeholder="Ex: 02:30" required wire:key="manual-hours-time" />
+                        @else
+                            <flux:input type="text" wire:model="manualHours" placeholder="Ex: 1, 2, 5" required wire:key="manual-hours-text" />
+                        @endif
                     </flux:field>
                     <flux:field>
-                        <flux:label>{{ __('Rate') }}</flux:label>
+                        <flux:label>{{ $manualBillingType === 'hourly' ? __('Rate') : __('Unit Price') }}</flux:label>
                         <flux:input type="number" step="0.01" wire:model="manualRate" icon="banknotes" required />
                     </flux:field>
                 </div>

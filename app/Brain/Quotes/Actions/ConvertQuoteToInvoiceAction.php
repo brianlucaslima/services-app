@@ -61,6 +61,7 @@ class ConvertQuoteToInvoiceAction extends Action
                 'quantity' => $item->quantity,
                 'unit_price' => $item->unit_price,
                 'amount' => $amount,
+                'billing_type' => $item->billing_type ?? 'hourly',
             ]);
         }
 

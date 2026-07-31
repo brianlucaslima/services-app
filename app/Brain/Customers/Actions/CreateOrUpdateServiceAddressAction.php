@@ -22,6 +22,7 @@ use Brain\Action;
  * @property-read float $durationHours
  * @property-read float $hourlyRate
  * @property-read int $calendarId
+ * @property-read string $billingType
  * @property int $resolvedAddressId
  */
 class CreateOrUpdateServiceAddressAction extends Action
@@ -37,6 +38,7 @@ class CreateOrUpdateServiceAddressAction extends Action
             'durationHours' => 'required|numeric|min:0',
             'hourlyRate' => 'required|numeric|min:0',
             'calendarId' => 'required|exists:calendars,id',
+            'billingType' => 'required|in:hourly,unit',
         ];
     }
 
@@ -59,6 +61,7 @@ class CreateOrUpdateServiceAddressAction extends Action
                 'duration_hours' => $this->durationHours,
                 'hourly_rate' => $this->hourlyRate,
                 'calendar_id' => $this->calendarId,
+                'billing_type' => $this->billingType,
                 'type' => $typeSlug,
             ]
         );

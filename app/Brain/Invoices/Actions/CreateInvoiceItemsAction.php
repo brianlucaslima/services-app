@@ -42,8 +42,9 @@ class CreateInvoiceItemsAction extends Action
             $addressId = $service->service_address_id ?? 0;
             $typeId = $service->service_type_id ?? 0;
             $rate = (float) $service->hourly_rate;
+            $billingType = $service->billing_type ?? 'hourly';
 
-            $groupKey = "{$weekKey}_{$addressId}_{$typeId}_{$rate}";
+            $groupKey = "{$weekKey}_{$addressId}_{$typeId}_{$rate}_{$billingType}";
 
             if (! isset($groups[$groupKey])) {
                 $groups[$groupKey] = [
@@ -51,6 +52,7 @@ class CreateInvoiceItemsAction extends Action
                     'address' => $service->address,
                     'base_description' => $service->description,
                     'hourly_rate' => $rate,
+                    'billing_type' => $billingType,
                     'dates' => [],
                 ];
             }
@@ -96,6 +98,7 @@ class CreateInvoiceItemsAction extends Action
                 'quantity' => $totalHours,
                 'unit_price' => $group['hourly_rate'],
                 'amount' => $amount,
+                'billing_type' => $group['billing_type'],
             ]);
         }
 

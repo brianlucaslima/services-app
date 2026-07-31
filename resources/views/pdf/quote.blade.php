@@ -197,10 +197,18 @@
                         @endif
                     </td>
                     <td class="text-right font-medium text-zinc-700">
-                        {{ number_format($item->quantity, 2) }}
+                        @if(($item->billing_type ?? 'hourly') === 'hourly')
+                            {{ \App\Brain\Helpers\TimeHelper::decimalToColon($item->quantity) }}h
+                        @else
+                            {{ number_format($item->quantity, 2) }}
+                        @endif
                     </td>
                     <td class="text-right text-zinc-600">
-                        {{ Number::currency($item->unit_price, 'GBP') }}
+                        @if(($item->billing_type ?? 'hourly') === 'hourly')
+                            {{ Number::currency($item->unit_price, 'GBP') }}/h
+                        @else
+                            {{ Number::currency($item->unit_price, 'GBP') }}
+                        @endif
                     </td>
                     <td class="text-right font-semibold text-zinc-950">
                         {{ Number::currency($item->amount, 'GBP') }}

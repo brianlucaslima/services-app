@@ -23,15 +23,29 @@ new class extends Component
         return auth()->user()->company->calendars()->orderBy('name')->get();
     }
 
+    #[Computed]
+    public function collaborators()
+    {
+        return auth()->user()->company->users()->orderBy('name')->get();
+    }
+
     // Reschedule modal state
     public bool $showRescheduleModal = false;
     public bool $showCompletionModal = false;
     public ?int $selectedScheduleId = null;
+    public ?int $selectedInstanceId = null;
     public string $selectedOriginalDate = '';
     public string $newDate = '';
     public string $newTime = '';
     public string $rescheduleMode = 'move'; // move or skip
     public string $notes = '';
+
+    // Completion / edit state
+    public array $completionUserIds = [];
+    public $completionHours = 0;
+    public $completionRate = 0;
+    public string $completionBillingType = 'hourly';
+    public bool $hasCompletedInstance = false;
 
     public function mount(): void
     {
@@ -82,20 +96,56 @@ new class extends Component
         $this->showRescheduleModal = true;
     }
 
-    public function openCompletion(int $scheduleId, string $date): void
+    public function openCompletion(?int $scheduleId, string $date, ?int $instanceId = null): void
     {
         $this->selectedScheduleId = $scheduleId;
+        $this->selectedInstanceId = $instanceId;
         $this->selectedOriginalDate = $date;
         $this->notes = '';
 
-        // Find existing instance to load notes if any
-        $instance = ServiceInstance::where('company_id', auth()->user()->company->id)
-            ->where('service_schedule_id', $scheduleId)
-            ->where('original_date', $date)
-            ->first();
-
-        if ($instance) {
+        if ($instanceId) {
+            $instance = ServiceInstance::with('users')->findOrFail($instanceId);
             $this->notes = $instance->notes ?? '';
+            $this->completionRate = (float) $instance->hourly_rate;
+            $this->completionBillingType = $instance->billing_type ?? 'hourly';
+            $this->completionUserIds = $instance->users->pluck('id')->toArray();
+            $this->hasCompletedInstance = ($instance->status === 'completed');
+            $this->selectedScheduleId = $instance->service_schedule_id;
+
+            $duration = (float) $instance->duration_hours;
+        } else {
+            $schedule = ServiceSchedule::with(['address', 'users'])->findOrFail($scheduleId);
+
+            // Find existing instance
+            $instance = ServiceInstance::with('users')->where('company_id', auth()->user()->company->id)
+                ->where('service_schedule_id', $scheduleId)
+                ->whereDate('original_date', $date)
+                ->first();
+
+            if ($instance) {
+                $this->notes = $instance->notes ?? '';
+                $this->completionRate = (float) $instance->hourly_rate;
+                $this->completionBillingType = $instance->billing_type ?? 'hourly';
+                $this->completionUserIds = $instance->users->pluck('id')->toArray();
+                $this->hasCompletedInstance = ($instance->status === 'completed');
+                $this->selectedInstanceId = $instance->id;
+
+                $duration = (float) $instance->duration_hours;
+            } else {
+                $this->completionRate = (float) $schedule->address->hourly_rate;
+                $this->completionBillingType = $schedule->address->billing_type ?? 'hourly';
+                $this->completionUserIds = $schedule->users->pluck('id')->toArray();
+                $this->hasCompletedInstance = false;
+                $this->selectedInstanceId = null;
+
+                $duration = (float) $schedule->address->duration_hours;
+            }
+        }
+
+        if ($this->completionBillingType === 'hourly') {
+            $this->completionHours = \App\Brain\Helpers\TimeHelper::decimalToColon($duration);
+        } else {
+            $this->completionHours = $duration;
         }
 
         $this->showCompletionModal = true;
@@ -128,18 +178,80 @@ new class extends Component
 
     public function saveCompletion(): void
     {
-        // Run the UpdateServiceOccurrenceWorkflow!
-        \App\Brain\Agenda\Workflows\UpdateServiceOccurrenceWorkflow::run([
-            'scheduleId' => $this->selectedScheduleId,
-            'originalDate' => $this->selectedOriginalDate,
-            'companyId' => auth()->user()->company->id,
-            'status' => 'completed',
-            'notes' => $this->notes,
-        ]);
+        $userIds = $this->completionBillingType === 'hourly' ? $this->completionUserIds : [];
+
+        if ($this->completionBillingType === 'hourly') {
+            $hoursDecimal = \App\Brain\Helpers\TimeHelper::humanToDecimal($this->completionHours);
+        } else {
+            $hoursDecimal = (float) $this->completionHours;
+        }
+
+        if ($this->selectedScheduleId) {
+            // Run the UpdateServiceOccurrenceWorkflow!
+            \App\Brain\Agenda\Workflows\UpdateServiceOccurrenceWorkflow::run([
+                'scheduleId' => $this->selectedScheduleId,
+                'originalDate' => $this->selectedOriginalDate,
+                'companyId' => auth()->user()->company->id,
+                'status' => 'completed',
+                'notes' => $this->notes,
+                'durationHours' => $hoursDecimal,
+                'hourlyRate' => $this->completionRate,
+                'userIds' => $userIds,
+            ]);
+        } elseif ($this->selectedInstanceId) {
+            // Update independent instance directly
+            $instance = ServiceInstance::where('company_id', auth()->user()->company->id)->findOrFail($this->selectedInstanceId);
+            $instance->update([
+                'notes' => $this->notes,
+                'duration_hours' => $hoursDecimal,
+                'hourly_rate' => $this->completionRate,
+                'status' => 'completed',
+            ]);
+            $instance->users()->sync($userIds);
+        }
 
         $this->showCompletionModal = false;
         $this->refreshAgenda();
-        Flux::toast(variant: 'success', text: __('Service marked as completed.'));
+        Flux::toast(variant: 'success', text: __('Service saved.'));
+    }
+
+    public function directUncomplete(?int $scheduleId, string $date, ?int $instanceId = null): void
+    {
+        $this->selectedScheduleId = $scheduleId;
+        $this->selectedInstanceId = $instanceId;
+        $this->selectedOriginalDate = $date;
+        $this->uncompleteService();
+    }
+
+    public function uncompleteService(): void
+    {
+        $instance = null;
+
+        if ($this->selectedInstanceId) {
+            $instance = ServiceInstance::where('company_id', auth()->user()->company->id)->find($this->selectedInstanceId);
+        }
+
+        if (!$instance && $this->selectedScheduleId) {
+            $instance = ServiceInstance::where('company_id', auth()->user()->company->id)
+                ->where('service_schedule_id', $this->selectedScheduleId)
+                ->whereDate('original_date', $this->selectedOriginalDate)
+                ->first();
+        }
+
+        if ($instance) {
+            // First check if it is part of an invoice item (cannot uncomplete if billed)
+            if ($instance->invoiceItem()->exists()) {
+                Flux::toast(variant: 'danger', text: __('This service is already included in an invoice and cannot be unmarked.'));
+                return;
+            }
+
+            // Delete the instance to revert to schedule default
+            $instance->delete();
+        }
+
+        $this->showCompletionModal = false;
+        $this->refreshAgenda();
+        Flux::toast(variant: 'success', text: __('Service unmarked as completed.'));
     }
 
     public function saveReschedule(): void
@@ -173,7 +285,7 @@ new class extends Component
 
         // Get all instances in or affecting this week
         $instancesQuery = ServiceInstance::where('company_id', $companyId)
-            ->with(['schedule.address.customer', 'users', 'address'])
+            ->with(['schedule.address.customer', 'users', 'address', 'invoiceItem'])
             ->where(function($query) use ($start, $end) {
                 $query->whereBetween('date', [$start->format('Y-m-d'), $end->format('Y-m-d')])
                       ->orWhereBetween('original_date', [$start->format('Y-m-d'), $end->format('Y-m-d')]);
@@ -220,6 +332,8 @@ new class extends Component
                         // Regular occurrence
                         $dayServices[] = [
                             'id' => $schedule->id,
+                            'instance_id' => null,
+                            'is_billed' => false,
                             'customer_name' => $schedule->address->customer->name,
                             'address_label' => $schedule->address->label,
                             'description' => $schedule->description ?: ($schedule->type ? $schedule->type->name : null),
@@ -231,6 +345,7 @@ new class extends Component
                             'original_date' => $dateStr,
                             'is_override' => false,
                             'status' => 'scheduled',
+                            'billing_type' => $schedule->address->billing_type ?? 'hourly',
                             'assigned_users' => $assignedUsers->map(fn($u) => [
                                 'name' => $u->name,
                                 'initials' => $u->initials(),
@@ -250,6 +365,8 @@ new class extends Component
                         // It was overridden but remains on the same day (maybe time change)
                         $dayServices[] = [
                             'id' => $schedule->id,
+                            'instance_id' => $override->id,
+                            'is_billed' => (bool) $override->invoiceItem,
                             'customer_name' => $schedule->address->customer->name,
                             'address_label' => $schedule->address->label,
                             'description' => $override->description,
@@ -261,6 +378,7 @@ new class extends Component
                             'original_date' => $dateStr,
                             'is_override' => true,
                             'status' => $override->status,
+                            'billing_type' => $override->billing_type ?? $schedule->address->billing_type ?? 'hourly',
                             'assigned_users' => $assignedUsers->map(fn($u) => [
                                 'name' => $u->name,
                                 'initials' => $u->initials(),
@@ -290,6 +408,8 @@ new class extends Component
 
                         $dayServices[] = [
                             'id' => $instance->schedule?->id,
+                            'instance_id' => $instance->id,
+                            'is_billed' => (bool) $instance->invoiceItem,
                             'customer_name' => $instance->schedule?->address->customer->name ?? $instance->customer?->name ?? 'N/A',
                             'address_label' => $instance->schedule?->address->label ?? $instance->address?->label ?? 'N/A',
                             'description' => $instance->description,
@@ -302,6 +422,7 @@ new class extends Component
                             'is_override' => (bool) $instance->service_schedule_id,
                             'rescheduled_from' => $instance->original_date ? $instance->original_date->format('d/m') : null,
                             'status' => $instance->status,
+                            'billing_type' => $instance->billing_type ?? $instance->schedule?->address->billing_type ?? 'hourly',
                             'assigned_users' => $assignedUsers->map(fn($u) => [
                                 'name' => $u->name,
                                 'initials' => $u->initials(),
@@ -328,15 +449,20 @@ new class extends Component
         $this->weeklyPayout = 0;
         foreach ($this->days as $day) {
             foreach ($day['services'] as $service) {
+                $isHourly = ($service['billing_type'] ?? 'hourly') === 'hourly';
                 if (auth()->user()->role !== 'management') {
                     // Collaborator only gets paid for completed services
                     if ($service['status'] === 'completed') {
-                        $this->weeklyHours += $service['duration'] / (count($service['assigned_users']) ?: 1);
+                        if ($isHourly) {
+                            $this->weeklyHours += $service['duration'] / (count($service['assigned_users']) ?: 1);
+                        }
                         $this->weeklyValue += $service['total_value'];
                     }
                 } else {
                     // Management sees totals for all active services in view
-                    $this->weeklyHours += $service['duration'];
+                    if ($isHourly) {
+                        $this->weeklyHours += $service['duration'];
+                    }
                     $this->weeklyValue += $service['total_value'];
                     // Sum payout for completed services (or all services, but "confirmado e executado" usually means we calculate payout for completed, or we can count expected payout too. Let's count payout for completed services only, which perfectly matches "confirmado e executado", or let's sum payouts for completed services).
                     if ($service['status'] === 'completed') {
@@ -387,7 +513,7 @@ new class extends Component
 
 ?>
 
-<div class="mx-auto max-w-5xl space-y-6">
+<div class="mx-auto max-w-none w-full px-4 sm:px-6 lg:px-8 space-y-6 pb-24">
     <header class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
             <h1 class="text-2xl font-semibold text-zinc-900 dark:text-white">{{ __('Agenda') }}</h1>
@@ -396,7 +522,7 @@ new class extends Component
                 <div class="flex items-center gap-3 border-l border-zinc-200 dark:border-zinc-700 pl-4">
                     <div class="flex items-center gap-1.5">
                         <flux:icon.clock class="w-4 h-4" />
-                        <span class="font-medium text-zinc-900 dark:text-white">{{ $weeklyHours }}h</span>
+                        <span class="font-medium text-zinc-900 dark:text-white">{{ \App\Brain\Helpers\TimeHelper::decimalToHuman($weeklyHours) }}</span>
                     </div>
                     <div class="flex items-center gap-1.5">
                         <flux:icon.banknotes class="w-4 h-4 text-emerald-500" />
@@ -435,10 +561,15 @@ new class extends Component
                 <div class="p-3 {{ $day['is_today'] ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-900' : 'bg-zinc-50 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300' }} border-b border-zinc-200 dark:border-zinc-700 text-center relative">
                     <p class="text-xs font-bold uppercase tracking-wider">{{ $day['date']->translatedFormat('D') }}</p>
                     <p class="text-lg font-semibold">{{ $day['date']->format('d') }}</p>
-                    @php $dayHours = collect($day['services'])->where('status', '!=', 'skipped')->sum('duration'); @endphp
+                    @php 
+                        $dayHours = collect($day['services'])
+                            ->where('status', '!=', 'skipped')
+                            ->filter(fn($s) => ($s['billing_type'] ?? 'hourly') === 'hourly')
+                            ->sum('duration'); 
+                    @endphp
                     @if($dayHours > 0)
                         <span class="absolute top-1.5 right-2 text-[10px] font-bold px-1.5 py-0.5 rounded-full {{ $day['is_today'] ? 'bg-white/20 text-white dark:bg-zinc-900/10 dark:text-zinc-900' : 'bg-zinc-200 text-zinc-700 dark:bg-zinc-700 dark:text-zinc-300' }}">
-                            {{ number_format($dayHours, 1) }}h
+                            {{ \App\Brain\Helpers\TimeHelper::decimalToHuman($dayHours) }}
                         </span>
                     @endif
                 </div>
@@ -455,21 +586,6 @@ new class extends Component
                                     @if($service['status'] === 'completed')
                                         <flux:icon.check-circle class="w-4 h-4 text-emerald-500" variant="solid" />
                                     @endif
-
-                                    @if(auth()->user()->role === 'management' && $service['id'] !== null)
-                                        <flux:dropdown align="end">
-                                            <flux:button variant="ghost" size="xs" icon="ellipsis-vertical" class="h-4 w-4" />
-                                            <flux:menu>
-                                                @if($service['status'] !== 'completed')
-                                                    <flux:menu.item icon="check" wire:click="openCompletion({{ $service['id'] }}, '{{ $service['original_date'] }}')">{{ __('Mark as Completed') }}</flux:menu.item>
-                                                @else
-                                                    <flux:menu.item icon="pencil" wire:click="openCompletion({{ $service['id'] }}, '{{ $service['original_date'] }}')">{{ __('Edit Notes') }}</flux:menu.item>
-                                                @endif
-                                                <flux:menu.item icon="calendar" wire:click="openReschedule({{ $service['id'] }}, '{{ $service['original_date'] }}', '{{ $service['time'] }}')">{{ __('Reschedule') }}</flux:menu.item>
-                                                <flux:menu.item icon="x-mark" variant="danger" wire:click="skipOccurrence({{ $service['id'] }}, '{{ $service['original_date'] }}')">{{ __('Skip this week') }}</flux:menu.item>
-                                            </flux:menu>
-                                        </flux:dropdown>
-                                    @endif
                                 </div>
                             </div>
 
@@ -483,15 +599,28 @@ new class extends Component
                                 {{ $service['address_label'] }}
                             </p>
 
-                            <div class="mt-1 flex items-center gap-2 text-[10px] text-zinc-500">
-                                <div class="flex items-center gap-0.5">
-                                    <flux:icon.clock class="w-3 h-3" />
-                                    <span>{{ $service['duration'] }}h</span>
-                                </div>
+                             <div class="mt-1 flex items-center gap-2 text-[10px] text-zinc-500">
+                                @if(($service['billing_type'] ?? 'hourly') === 'hourly')
+                                    <div class="flex items-center gap-0.5">
+                                        <flux:icon.clock class="w-3 h-3" />
+                                        <span>{{ \App\Brain\Helpers\TimeHelper::decimalToHuman($service['duration']) }}</span>
+                                    </div>
+                                @else
+                                    <div class="flex items-center gap-0.5">
+                                        <flux:icon.hashtag class="w-3 h-3" />
+                                        <span>{{ (float) $service['duration'] }} {{ (float) $service['duration'] === 1.0 ? __('unit') : __('units') }}</span>
+                                    </div>
+                                @endif
                                 <div class="flex items-center gap-0.5 font-medium text-zinc-700 dark:text-zinc-300">
                                     <flux:icon.banknotes class="w-3 h-3" />
                                     <span>{{ Number::currency($service['total_value'], 'GBP') }}</span>
                                 </div>
+                                @if($service['is_billed'] ?? false)
+                                    <div class="flex items-center gap-0.5 text-blue-600 dark:text-blue-400 font-bold ml-auto" title="{{ __('Invoiced') }}">
+                                        <flux:icon.document-text class="w-3.5 h-3.5" />
+                                        <span class="text-[9px] uppercase tracking-wider">{{ __('Billed') }}</span>
+                                    </div>
+                                @endif
                             </div>
 
                             @if(isset($service['rescheduled_from']))
@@ -507,15 +636,47 @@ new class extends Component
                                 </span>
                             </div>
 
-                            @if(!empty($service['assigned_users']))
-                                <div class="mt-2 flex -space-x-1 overflow-hidden">
-                                    @foreach($service['assigned_users'] as $u)
-                                        <div class="flex justify-center itens-center h-5 w-5 rounded-full ring-2 ring-white dark:ring-zinc-900 bg-zinc-100 dark:bg-zinc-700 text-[8px] font-bold flex items-center justify-center text-zinc-600 dark:text-zinc-300" title="{{ $u['name'] }}">
-                                            {{ $u['initials'] }}
-                                        </div>
-                                    @endforeach
-                                </div>
-                            @endif
+                              @if(($service['billing_type'] ?? 'hourly') === 'hourly' && !empty($service['assigned_users']))
+                                  <div class="mt-2 flex -space-x-1 overflow-hidden">
+                                      @foreach($service['assigned_users'] as $u)
+                                          <div class="flex justify-center itens-center h-5 w-5 rounded-full ring-2 ring-white dark:ring-zinc-900 bg-zinc-100 dark:bg-zinc-700 text-[8px] font-bold flex items-center justify-center text-zinc-600 dark:text-zinc-300" title="{{ $u['name'] }}">
+                                              {{ $u['initials'] }}
+                                          </div>
+                                      @endforeach
+                                  </div>
+                              @endif
+
+                              @if(auth()->user()->role !== 'collaborator' && ($service['id'] !== null || $service['instance_id'] !== null))
+                                  <div class="mt-2.5 pt-2 border-t border-zinc-200/50 dark:border-zinc-700/50 flex items-center justify-between gap-1">
+                                      @if($service['status'] !== 'completed')
+                                          <button type="button" wire:click="openCompletion({{ $service['id'] ?? 'null' }}, '{{ $service['original_date'] }}', {{ $service['instance_id'] ?? 'null' }})" class="flex-1 inline-flex items-center justify-center gap-1 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/20 dark:hover:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 py-1 px-1.5 rounded text-[10px] font-semibold cursor-pointer border border-emerald-200/30 dark:border-emerald-800/30" title="{{ __('Mark as Completed') }}">
+                                              <flux:icon.check class="w-3 h-3" />
+                                              <span>{{ __('Complete') }}</span>
+                                          </button>
+                                      @else
+                                          <button type="button" wire:click="openCompletion({{ $service['id'] ?? 'null' }}, '{{ $service['original_date'] }}', {{ $service['instance_id'] ?? 'null' }})" class="flex-1 inline-flex items-center justify-center gap-1 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 py-1 px-1.5 rounded text-[10px] font-semibold cursor-pointer border border-zinc-200 dark:border-zinc-700" title="{{ __('Edit Execution / Value') }}">
+                                              <flux:icon.pencil class="w-3 h-3" />
+                                              <span>{{ __('Edit') }}</span>
+                                          </button>
+                                          <button type="button" wire:click="directUncomplete({{ $service['id'] ?? 'null' }}, '{{ $service['original_date'] }}', {{ $service['instance_id'] ?? 'null' }})" class="inline-flex items-center justify-center bg-red-50 hover:bg-red-100 dark:bg-red-950/20 dark:hover:bg-red-900/30 text-red-600 dark:text-red-400 p-1 rounded text-[10px] font-semibold cursor-pointer border border-red-200/30 dark:border-red-800/30" title="{{ __('Unmark Executed') }}">
+                                              <flux:icon.x-mark class="w-3 h-3" />
+                                          </button>
+                                      @endif
+
+                                      <!-- More Actions (Only for scheduled services) -->
+                                      @if($service['id'] !== null)
+                                          <flux:dropdown align="end">
+                                              <button type="button" class="inline-flex items-center justify-center bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 p-1 rounded text-[10px] text-zinc-500 cursor-pointer border border-zinc-200 dark:border-zinc-700">
+                                                  <flux:icon.ellipsis-horizontal class="w-3 h-3" />
+                                              </button>
+                                              <flux:menu>
+                                                  <flux:menu.item icon="calendar" wire:click="openReschedule({{ $service['id'] }}, '{{ $service['original_date'] }}', '{{ $service['time'] }}')">{{ __('Reschedule') }}</flux:menu.item>
+                                                  <flux:menu.item icon="x-mark" variant="danger" wire:click="skipOccurrence({{ $service['id'] }}, '{{ $service['original_date'] }}')">{{ __('Skip this week') }}</flux:menu.item>
+                                              </flux:menu>
+                                          </flux:dropdown>
+                                      @endif
+                                  </div>
+                              @endif
                         </div>
                     @empty
                         <div class="h-full flex items-center justify-center">
@@ -563,22 +724,57 @@ new class extends Component
     </flux:modal>
 
     <!-- Completion Modal -->
-    <flux:modal wire:model="showCompletionModal" class="md:w-96">
+    <flux:modal wire:model="showCompletionModal" class="w-full md:w-[480px]">
         <form wire:submit="saveCompletion" class="space-y-6">
             <div>
-                <flux:heading size="lg">{{ __('Complete Service') }}</flux:heading>
-                <flux:subheading>{{ __('Mark this service as executed.') }}</flux:subheading>
+                <flux:heading size="lg">{{ $hasCompletedInstance ? __('Edit Executed Service') : __('Complete Service') }}</flux:heading>
+                <flux:subheading>{{ $hasCompletedInstance ? __('Edit details for this executed service occurrence.') : __('Mark this service as executed.') }}</flux:subheading>
             </div>
 
-            <flux:field>
-                <flux:label>{{ __('Notes (Optional)') }}</flux:label>
-                <flux:textarea wire:model="notes" placeholder="{{ __('Add any observations about the service...') }}" />
-            </flux:field>
+            <div class="space-y-4">
+                <!-- Collaborators (Assigned Team) -->
+                @if($completionBillingType === 'hourly')
+                    <flux:field>
+                        <flux:label>{{ __('Assigned Team') }}</flux:label>
+                        <div class="mt-2 space-y-2 max-h-36 overflow-y-auto border border-zinc-200 dark:border-zinc-800 rounded-lg p-3 bg-zinc-50/50 dark:bg-zinc-950/20">
+                            @foreach($this->collaborators as $collab)
+                                <flux:checkbox wire:model="completionUserIds" value="{{ $collab->id }}" label="{{ $collab->name }}" />
+                            @endforeach
+                        </div>
+                    </flux:field>
+                @endif
 
-            <div class="flex gap-2">
-                <flux:spacer />
-                <flux:button wire:click="$set('showCompletionModal', false)" variant="ghost">{{ __('Cancel') }}</flux:button>
-                <flux:button type="submit" variant="primary">{{ __('Confirm Execution') }}</flux:button>
+                <!-- Value editing (Hours/Quantity and Rate/Unit Price) -->
+                <div class="grid grid-cols-2 gap-4">
+                    <flux:field>
+                        <flux:label>{{ $completionBillingType === 'hourly' ? __('Hours') : __('Quantity') }}</flux:label>
+                        @if($completionBillingType === 'hourly')
+                            <flux:input type="time" wire:model="completionHours" placeholder="Ex: 02:30" required wire:key="completion-hours-time" />
+                        @else
+                            <flux:input type="number" step="0.01" wire:model="completionHours" placeholder="Ex: 5" required wire:key="completion-hours-number" />
+                        @endif
+                    </flux:field>
+                    <flux:field>
+                        <flux:label>{{ $completionBillingType === 'hourly' ? __('Hourly Rate') : __('Unit Price') }}</flux:label>
+                        <flux:input type="number" step="0.01" wire:model="completionRate" icon="banknotes" required />
+                    </flux:field>
+                </div>
+
+                <!-- Notes -->
+                <flux:field>
+                    <flux:label>{{ __('Notes (Optional)') }}</flux:label>
+                    <flux:textarea wire:model="notes" placeholder="{{ __('Add any observations about the service...') }}" />
+                </flux:field>
+            </div>
+
+            <div class="flex flex-col-reverse sm:flex-row gap-2 pt-4 border-t border-zinc-100 dark:border-zinc-800/50">
+                @if($hasCompletedInstance)
+                    <flux:button wire:click="uncompleteService" variant="danger" class="w-full sm:w-auto mr-auto">{{ __('Unmark Executed') }}</flux:button>
+                @endif
+                <div class="flex gap-2 w-full sm:w-auto sm:justify-end">
+                    <flux:button wire:click="$set('showCompletionModal', false)" variant="ghost" class="flex-1 sm:flex-none">{{ __('Cancel') }}</flux:button>
+                    <flux:button type="submit" variant="primary" class="flex-1 sm:flex-none">{{ $hasCompletedInstance ? __('Save Changes') : __('Confirm Execution') }}</flux:button>
+                </div>
             </div>
         </form>
     </flux:modal>

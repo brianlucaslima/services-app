@@ -154,7 +154,14 @@
         </div>
         <div class="summary-col">
             <span style="color: #71717a; text-transform: uppercase; font-size: 10px;">{{ __('Total Hours') }}</span>
-            <div class="summary-value">{{ number_format(collect($services)->sum('share_hours'), 2) }}h</div>
+            <div class="summary-value">
+                {{ \App\Brain\Helpers\TimeHelper::decimalToColon(collect($services)->where('billing_type', 'hourly')->sum('share_hours')) }}h
+                @if(collect($services)->where('billing_type', 'unit')->isNotEmpty())
+                    <span style="font-size: 10px; font-weight: normal; color: #71717a; display: block; margin-top: 2px;">
+                        + {{ number_format(collect($services)->where('billing_type', 'unit')->sum('share_hours'), 2) }} {{ __('units') }}
+                    </span>
+                @endif
+            </div>
         </div>
         <div class="summary-col">
             <span style="color: #71717a; text-transform: uppercase; font-size: 10px;">{{ __('Total Payout') }}</span>
@@ -169,7 +176,7 @@
                 <th style="width: 15%;">{{ __('Date') }}</th>
                 <th>{{ __('Service / Location') }}</th>
                 <th style="width: 15%;">{{ __('Type') }}</th>
-                <th style="width: 15%;" class="text-right">{{ __('Your Hours') }}</th>
+                <th style="width: 15%;" class="text-right">{{ __('Hours/Qty') }}</th>
                 <th style="width: 15%;">{{ __('Status') }}</th>
                 <th style="width: 15%;" class="text-right">{{ __('Payout') }}</th>
             </tr>
@@ -189,8 +196,13 @@
                         <span class="badge badge-{{ $service['location_type'] }}">{{ __($service['location_type']) }}</span>
                     </td>
                     <td class="text-right font-semibold">
-                        {{ number_format($service['share_hours'], 2) }}h<br>
-                        <span style="color: #71717a; font-size: 10px; font-weight: normal;">{{ __('of') }} {{ number_format($service['total_duration'], 2) }}h</span>
+                        @if(($service['billing_type'] ?? 'hourly') === 'hourly')
+                            {{ \App\Brain\Helpers\TimeHelper::decimalToColon($service['share_hours']) }}h<br>
+                            <span style="color: #71717a; font-size: 10px; font-weight: normal;">{{ __('of') }} {{ \App\Brain\Helpers\TimeHelper::decimalToColon($service['total_duration']) }}h</span>
+                        @else
+                            {{ number_format($service['share_hours'], 2) }}<br>
+                            <span style="color: #71717a; font-size: 10px; font-weight: normal;">{{ __('of') }} {{ number_format($service['total_duration'], 2) }}</span>
+                        @endif
                     </td>
                     <td>
                         <span class="badge badge-{{ $service['payout_status'] }}">{{ __($service['payout_status']) }}</span>

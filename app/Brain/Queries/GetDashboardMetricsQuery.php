@@ -81,7 +81,9 @@ class GetDashboardMetricsQuery extends Query
         foreach ($collabInstancesThisMonth as $inst) {
             $teamCount = $inst->users->count() ?: 1;
             $shareHours = $inst->duration_hours / $teamCount;
-            $completedHours += $shareHours;
+            if (($inst->billing_type ?? 'hourly') === 'hourly') {
+                $completedHours += $shareHours;
+            }
             $earningsThisMonth += $collab->hourlyRateFor($inst->address?->type) * $shareHours;
         }
 

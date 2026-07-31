@@ -423,3 +423,250 @@ test('draft invoice can be edited by going back to the service selection screen'
     expect($invoice->items->first()->quantity)->toBe('5.00')
         ->and((float) $invoice->items->first()->amount)->toBe(100.00);
 });
+
+test('collaborators can be added and removed from a service instance on the invoice details screen', function () {
+    // 1. Setup company, user, customer, and collaborator
+    $user = User::factory()->create([
+        'role' => 'management',
+    ]);
+    $company = Company::create([
+        'user_id' => $user->id,
+        'name' => 'Invoease HQ',
+        'email' => 'hq@invoease.co.uk',
+    ]);
+    $user->update(['company_id' => $company->id]);
+    $user->refresh();
+
+    $customer = Customer::create([
+        'company_id' => $company->id,
+        'name' => 'John Doe',
+        'email' => 'john@example.com',
+    ]);
+
+    $collab1 = User::factory()->create([
+        'company_id' => $company->id,
+        'name' => 'Jane Done',
+    ]);
+
+    $collab2 = User::factory()->create([
+        'company_id' => $company->id,
+        'name' => 'Bob Marley',
+    ]);
+
+    $instance = ServiceInstance::create([
+        'company_id' => $company->id,
+        'customer_id' => $customer->id,
+        'description' => 'Cleaning Work',
+        'date' => now()->format('Y-m-d'),
+        'time' => '10:00:00',
+        'duration_hours' => 2.00,
+        'hourly_rate' => 20.00,
+        'status' => 'completed',
+    ]);
+
+    // Attach collab1 initially
+    $instance->users()->attach($collab1->id);
+
+    // Create invoice for this instance
+    $invoice = Invoice::create([
+        'company_id' => $company->id,
+        'customer_id' => $customer->id,
+        'number' => '0001',
+        'date' => now(),
+        'status' => 'draft',
+        'total_amount' => 40.00,
+    ]);
+
+    $item = InvoiceItem::create([
+        'invoice_id' => $invoice->id,
+        'service_instance_id' => $instance->id,
+        'description' => 'Cleaning Work ('.now()->format('d/m/Y').')',
+        'quantity' => 2.00,
+        'unit_price' => 20.00,
+        'amount' => 40.00,
+    ]);
+
+    $this->actingAs($user);
+
+    // 2. Test Livewire details screen, adding and removing collaborators
+    Livewire::test('invoices')
+        ->set('selectedInvoiceId', $invoice->id)
+        ->set('screen', 'detail')
+        // Add collab2
+        ->call('addCollaborator', $item->id, $collab2->id)
+        ->assertHasNoErrors();
+
+    expect($instance->fresh()->users->pluck('id')->toArray())
+        ->toContain($collab1->id)
+        ->toContain($collab2->id);
+
+    // Remove collab1
+    Livewire::test('invoices')
+        ->set('selectedInvoiceId', $invoice->id)
+        ->set('screen', 'detail')
+        ->call('removeCollaborator', $item->id, $collab1->id)
+        ->assertHasNoErrors();
+
+    expect($instance->fresh()->users->pluck('id')->toArray())
+        ->not->toContain($collab1->id)
+        ->toContain($collab2->id);
+});
+
+test('pending services can be filtered by customer address/location on the invoice selection screen', function () {
+    // 1. Setup company, user, customer with two addresses, and two service instances
+    $user = User::factory()->create([
+        'role' => 'management',
+    ]);
+    $company = Company::create([
+        'user_id' => $user->id,
+        'name' => 'Invoease HQ',
+        'email' => 'hq@invoease.co.uk',
+    ]);
+    $user->update(['company_id' => $company->id]);
+    $user->refresh();
+
+    $customer = Customer::create([
+        'company_id' => $company->id,
+        'name' => 'John Doe',
+        'email' => 'john@example.com',
+    ]);
+
+    $address1 = ServiceAddress::create([
+        'customer_id' => $customer->id,
+        'label' => 'Main Office',
+        'address' => '123 Business Rd',
+        'is_active' => true,
+        'type' => 'office',
+        'duration_hours' => 2.00,
+        'hourly_rate' => 20.00,
+        'start_date' => now()->format('Y-m-d'),
+    ]);
+
+    $address2 = ServiceAddress::create([
+        'customer_id' => $customer->id,
+        'label' => 'Home',
+        'address' => '456 Residential Way',
+        'is_active' => true,
+        'type' => 'house',
+        'duration_hours' => 3.00,
+        'hourly_rate' => 25.00,
+        'start_date' => now()->format('Y-m-d'),
+    ]);
+
+    $instance1 = ServiceInstance::create([
+        'company_id' => $company->id,
+        'customer_id' => $customer->id,
+        'service_address_id' => $address1->id,
+        'description' => 'Office Cleaning Work',
+        'date' => now()->format('Y-m-d'),
+        'time' => '10:00:00',
+        'duration_hours' => 2.00,
+        'hourly_rate' => 20.00,
+        'status' => 'completed',
+    ]);
+
+    $instance2 = ServiceInstance::create([
+        'company_id' => $company->id,
+        'customer_id' => $customer->id,
+        'service_address_id' => $address2->id,
+        'description' => 'Home Cleaning Work',
+        'date' => now()->format('Y-m-d'),
+        'time' => '14:00:00',
+        'duration_hours' => 3.00,
+        'hourly_rate' => 25.00,
+        'status' => 'completed',
+    ]);
+
+    $this->actingAs($user);
+
+    // 2. Test Livewire selection screen and filtering
+    Livewire::test('invoices')
+        ->set('selectedCustomerId', $customer->id)
+        ->set('screen', 'select_services')
+        ->call('loadPendingServices')
+        ->assertSet('filterAddressId', 'all')
+        ->assertSee('Office Cleaning Work')
+        ->assertSee('Home Cleaning Work')
+
+        // Filter by Main Office
+        ->set('filterAddressId', $address1->id)
+        ->assertSee('Office Cleaning Work')
+        ->assertDontSee('Home Cleaning Work')
+
+        // Filter by Home
+        ->set('filterAddressId', $address2->id)
+        ->assertSee('Home Cleaning Work')
+        ->assertDontSee('Office Cleaning Work')
+
+        // Filter back to all
+        ->set('filterAddressId', 'all')
+        ->assertSee('Office Cleaning Work')
+        ->assertSee('Home Cleaning Work');
+});
+
+test('invoice details automatically creates and links a service instance when adding collaborators to a schedule-less hourly item', function () {
+    // 1. Setup company, user, customer, and collaborator
+    $user = User::factory()->create([
+        'role' => 'management',
+    ]);
+    $company = Company::create([
+        'user_id' => $user->id,
+        'name' => 'Invoease HQ',
+        'email' => 'hq@invoease.co.uk',
+    ]);
+    $user->update(['company_id' => $company->id]);
+    $user->refresh();
+
+    $customer = Customer::create([
+        'company_id' => $company->id,
+        'name' => 'John Doe',
+        'email' => 'john@example.com',
+    ]);
+
+    $collab = User::factory()->create([
+        'company_id' => $company->id,
+        'name' => 'Collaborator 1',
+    ]);
+
+    // Create an Invoice with a schedule-less (independent) InvoiceItem (service_instance_id is null)
+    $invoice = Invoice::create([
+        'company_id' => $company->id,
+        'customer_id' => $customer->id,
+        'number' => '0002',
+        'date' => now(),
+        'status' => 'draft',
+        'total_amount' => 50.00,
+    ]);
+
+    $item = InvoiceItem::create([
+        'invoice_id' => $invoice->id,
+        'service_instance_id' => null, // null originally!
+        'description' => 'Garden Maintenance',
+        'quantity' => 2.50,
+        'unit_price' => 20.00,
+        'amount' => 50.00,
+        'billing_type' => 'hourly',
+    ]);
+
+    $this->actingAs($user);
+
+    // 2. Add collaborator using Livewire
+    Livewire::test('invoices')
+        ->set('selectedInvoiceId', $invoice->id)
+        ->set('screen', 'detail')
+        ->call('addCollaborator', $item->id, $collab->id)
+        ->assertHasNoErrors();
+
+    // 3. Verify that a ServiceInstance was automatically created and linked
+    $item = $item->fresh();
+    expect($item->service_instance_id)->not->toBeNull();
+
+    $instance = ServiceInstance::find($item->service_instance_id);
+    expect($instance)->not->toBeNull()
+        ->and($instance->description)->toBe('Garden Maintenance')
+        ->and((float) $instance->duration_hours)->toBe(2.50)
+        ->and((float) $instance->hourly_rate)->toBe(20.00)
+        ->and($instance->status)->toBe('completed');
+
+    expect($instance->users->pluck('id')->toArray())->toContain($collab->id);
+});

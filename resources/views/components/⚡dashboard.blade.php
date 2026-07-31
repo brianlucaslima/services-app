@@ -102,7 +102,7 @@ new class extends Component
 
 ?>
 
-<div class="mx-auto max-w-5xl space-y-8 pb-24">
+<div class="mx-auto max-w-none w-full px-4 sm:px-6 lg:px-8 space-y-8 pb-24">
     <!-- Header Greeting -->
     <header class="flex items-center justify-between sm:px-0">
         <div>

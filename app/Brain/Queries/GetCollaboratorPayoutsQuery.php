@@ -62,6 +62,7 @@ class GetCollaboratorPayoutsQuery extends Query
                 'share_hours' => $inst->duration_hours / ($inst->users->count() ?: 1),
                 'payout' => $user->hourlyRateFor($inst->address?->type) * ($inst->duration_hours / ($inst->users->count() ?: 1)),
                 'payout_status' => $inst->payout_status ?? 'unpaid',
+                'billing_type' => $inst->billing_type ?? 'hourly',
             ])->toArray();
         }
 
@@ -86,16 +87,21 @@ class GetCollaboratorPayoutsQuery extends Query
 
             $instances = $query->with(['users', 'address'])->get();
             $totalHours = 0;
+            $totalUnits = 0;
             $totalPayout = 0;
 
             foreach ($instances as $inst) {
                 $assignedCount = $inst->users->count() ?: 1;
                 $shareHours = $inst->duration_hours / $assignedCount;
-                $totalHours += $shareHours;
+                if (($inst->billing_type ?? 'hourly') === 'hourly') {
+                    $totalHours += $shareHours;
+                } else {
+                    $totalUnits += $shareHours;
+                }
                 $totalPayout += $user->hourlyRateFor($inst->address?->type) * $shareHours;
             }
 
-            if ($totalHours > 0 || $user->role === 'collaborator') {
+            if ($totalHours > 0 || $totalUnits > 0 || $user->role === 'collaborator') {
                 $reports[] = [
                     'id' => $user->id,
                     'name' => $user->name,
@@ -104,6 +110,7 @@ class GetCollaboratorPayoutsQuery extends Query
                     'hourly_rate_house' => $user->hourly_rate_house,
                     'hourly_rate_office' => $user->hourly_rate_office,
                     'hours' => $totalHours,
+                    'units' => $totalUnits,
                     'payout' => $totalPayout,
                     'services_count' => $instances->count(),
                 ];

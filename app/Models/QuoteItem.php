@@ -15,6 +15,7 @@ class QuoteItem extends Model
         'quantity',
         'unit_price',
         'amount',
+        'billing_type',
     ];
 
     protected $casts = [

@@ -64,7 +64,7 @@ test('collaborator reports consolidated summary can be listed', function () {
 
     Livewire::test('collaborator-reports')
         ->assertSee($collab->name)
-        ->assertSee('2.00h')
+        ->assertSee('02:00h')
         ->assertSee('£30.00'); // 2 hours * 15.00/h = 30.00
 });
 

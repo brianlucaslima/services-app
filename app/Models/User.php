@@ -194,7 +194,7 @@ class User extends Authenticatable implements PasskeyUser
     public function hourlyRateFor(int|string|null $calendarId): float
     {
         if (empty($calendarId)) {
-            return 0.00;
+            return $this->hourly_rate ?: 0.00;
         }
 
         // If it is a string (legacy 'house'/'office'), we resolve the correct ID matching that slug
@@ -204,10 +204,10 @@ class User extends Authenticatable implements PasskeyUser
         }
 
         if (empty($calendarId)) {
-            return 0.00;
+            return $this->hourly_rate ?: 0.00;
         }
 
-        return (float) ($this->calendarRates()->where('calendar_id', $calendarId)->first()?->hourly_rate ?? 0.00);
+        return (float) ($this->calendarRates()->where('calendar_id', $calendarId)->first()?->hourly_rate ?? $this->hourly_rate ?? 0.00);
     }
 
     public function schedules(): BelongsToMany

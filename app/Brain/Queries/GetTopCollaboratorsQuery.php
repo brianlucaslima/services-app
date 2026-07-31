@@ -33,7 +33,9 @@ class GetTopCollaboratorsQuery extends Query
             foreach ($completedInstancesThisMonth as $inst) {
                 if ($inst->users->contains($collab->id)) {
                     $shareHours = $inst->duration_hours / ($inst->users->count() ?: 1);
-                    $hours += $shareHours;
+                    if (($inst->billing_type ?? 'hourly') === 'hourly') {
+                        $hours += $shareHours;
+                    }
                     $payout += $shareHours * $collab->hourlyRateFor($inst->address?->type);
                 }
             }

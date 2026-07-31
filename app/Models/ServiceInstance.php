@@ -25,6 +25,7 @@ class ServiceInstance extends Model
         'hourly_rate',
         'payout_status',
         'payout_date',
+        'billing_type',
     ];
 
     protected $casts = [

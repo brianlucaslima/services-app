@@ -86,3 +86,25 @@ test('get collaborator payouts query returns correct summary and detail reports'
         ->and($firstDetail['payout'])->toBe(48.00)
         ->and($firstDetail['payout_status'])->toBe('unpaid');
 });
+
+test('hourly rate query falls back to default hourly rate for independent schedule-less manual services', function () {
+    $owner = User::factory()->create();
+    $company = Company::create([
+        'user_id' => $owner->id,
+        'name' => 'Fallback Company',
+        'email' => 'fallback@example.com',
+    ]);
+
+    $collab = User::factory()->create([
+        'company_id' => $company->id,
+    ]);
+
+    // Save with the pivot hourly_rate
+    $collab->companies()->syncWithPivotValues([$company->id], [
+        'hourly_rate' => 15.00,
+        'role' => 'collaborator',
+    ]);
+
+    expect($collab->hourlyRateFor(null))->toBe(15.00);
+    expect($collab->hourlyRateFor('house'))->toBe(15.00);
+});

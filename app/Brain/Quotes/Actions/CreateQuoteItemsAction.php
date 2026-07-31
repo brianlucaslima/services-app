@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Brain\Quotes\Actions;
 
+use App\Brain\Helpers\TimeHelper;
 use App\Models\Quote;
 use App\Models\QuoteItem;
 use Brain\Action;
@@ -23,7 +24,7 @@ class CreateQuoteItemsAction extends Action
             'items' => 'required|array|min:1',
             'items.*.description' => 'required|string|max:255',
             'items.*.notes' => 'nullable|string',
-            'items.*.quantity' => 'required|numeric|min:0.01',
+            'items.*.quantity' => 'required',
             'items.*.unit_price' => 'required|numeric|min:0',
         ];
     }
@@ -38,7 +39,9 @@ class CreateQuoteItemsAction extends Action
         $total = 0;
 
         foreach ($this->items as $item) {
-            $amount = (float) $item['quantity'] * (float) $item['unit_price'];
+            $billingType = $item['billing_type'] ?? 'hourly';
+            $qty = $billingType === 'hourly' ? TimeHelper::humanToDecimal($item['quantity']) : (float) $item['quantity'];
+            $amount = $qty * (float) $item['unit_price'];
             $total += $amount;
 
             QuoteItem::create([
@@ -46,9 +49,10 @@ class CreateQuoteItemsAction extends Action
                 'service_type_id' => ! empty($item['service_type_id']) ? $item['service_type_id'] : null,
                 'description' => $item['description'],
                 'notes' => $item['notes'] ?? null,
-                'quantity' => $item['quantity'],
+                'quantity' => $qty,
                 'unit_price' => $item['unit_price'],
                 'amount' => $amount,
+                'billing_type' => $billingType,
             ]);
         }
 

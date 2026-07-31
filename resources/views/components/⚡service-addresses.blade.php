@@ -24,6 +24,7 @@ new class extends Component
     public $duration_hours = 0;
     public $hourly_rate = 0;
     public ?int $calendar_id = null;
+    public string $billing_type = 'hourly';
 
     // Schedules for the current address being edited
     public $schedules = [];
@@ -69,7 +70,12 @@ new class extends Component
         $this->zip_code = $address->zip_code;
         $this->start_date = $address->start_date ? $address->start_date->format('Y-m-d') : '';
         $this->end_date = $address->end_date ? $address->end_date->format('Y-m-d') : '';
-        $this->duration_hours = $address->duration_hours;
+        $this->billing_type = $address->billing_type ?? 'hourly';
+        if ($this->billing_type === 'hourly') {
+            $this->duration_hours = \App\Brain\Helpers\TimeHelper::decimalToColon($address->duration_hours);
+        } else {
+            $this->duration_hours = (float) $address->duration_hours;
+        }
         $this->hourly_rate = $address->hourly_rate;
         $this->calendar_id = $address->calendar_id;
 
@@ -105,9 +111,19 @@ new class extends Component
         $this->end_date = '';
         $this->duration_hours = 0;
         $this->hourly_rate = 0;
+        $this->billing_type = 'hourly';
         $this->calendar_id = auth()->check() ? (auth()->user()->company->calendars()->first()?->id) : null;
         $this->schedules = [];
         $this->showModal = false;
+    }
+
+    public function updatedBillingType($value): void
+    {
+        if ($value === 'hourly') {
+            $this->duration_hours = \App\Brain\Helpers\TimeHelper::decimalToColon($this->duration_hours);
+        } else {
+            $this->duration_hours = \App\Brain\Helpers\TimeHelper::humanToDecimal($this->duration_hours);
+        }
     }
 
     public function addSchedule(): void
@@ -133,18 +149,34 @@ new class extends Component
 
     public function save(): void
     {
+        // Clear user_ids for unit-based billing type
+        if ($this->billing_type === 'unit') {
+            foreach ($this->schedules as $idx => $sch) {
+                $this->schedules[$idx]['user_ids'] = [];
+            }
+        }
+
+        $durationRule = $this->billing_type === 'hourly' ? 'required' : 'required|numeric|min:0';
+
         $this->validate([
             'label' => 'required|string|max:255',
             'address' => 'required|string|max:255',
             'start_date' => 'required|date',
             'end_date' => 'nullable|date|after_or_equal:start_date',
-            'duration_hours' => 'required|numeric|min:0',
+            'duration_hours' => $durationRule,
             'hourly_rate' => 'required|numeric|min:0',
             'calendar_id' => 'required|exists:calendars,id',
             'schedules.*.recurrence_type' => 'required|in:once,weekly,fortnightly,monthly',
             'schedules.*.start_date' => 'required|date',
             'schedules.*.start_time' => 'required',
         ]);
+
+        // Parse the duration hours (handles formats like "2:30" or "2.5") only AFTER validation passes!
+        if ($this->billing_type === 'hourly') {
+            $parsedDuration = \App\Brain\Helpers\TimeHelper::humanToDecimal($this->duration_hours);
+        } else {
+            $parsedDuration = (float) $this->duration_hours;
+        }
 
         // Run the SaveServiceAddressWorkflow!
         \App\Brain\Customers\Workflows\SaveServiceAddressWorkflow::run([
@@ -156,9 +188,10 @@ new class extends Component
             'zipCode' => $this->zip_code,
             'startDate' => $this->start_date,
             'endDate' => $this->end_date,
-            'durationHours' => $this->duration_hours,
+            'durationHours' => $parsedDuration,
             'hourlyRate' => $this->hourly_rate,
             'calendarId' => $this->calendar_id,
+            'billingType' => $this->billing_type,
             'schedules' => $this->schedules,
         ]);
 
@@ -223,14 +256,25 @@ new class extends Component
                         <p class="text-sm text-zinc-500 dark:text-zinc-400">{{ $addr['address'] }}</p>
 
                         <div class="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-500">
-                            <div class="flex items-center gap-1">
-                                <flux:icon.clock class="w-3.5 h-3.5" />
-                                <span>{{ $addr['duration_hours'] }}h</span>
-                            </div>
-                            <div class="flex items-center gap-1">
-                                <flux:icon.banknotes class="w-3.5 h-3.5" />
-                                <span>{{ Number::currency($addr['hourly_rate'], 'GBP') }}/h ({{ Number::currency($addr['duration_hours'] * $addr['hourly_rate'], 'GBP') }})</span>
-                            </div>
+                            @if(($addr['billing_type'] ?? 'hourly') === 'hourly')
+                                <div class="flex items-center gap-1">
+                                    <flux:icon.clock class="w-3.5 h-3.5" />
+                                    <span>{{ \App\Brain\Helpers\TimeHelper::decimalToColon($addr['duration_hours']) }}h</span>
+                                </div>
+                                <div class="flex items-center gap-1">
+                                    <flux:icon.banknotes class="w-3.5 h-3.5" />
+                                    <span>{{ Number::currency($addr['hourly_rate'], 'GBP') }}/h ({{ Number::currency($addr['duration_hours'] * $addr['hourly_rate'], 'GBP') }})</span>
+                                </div>
+                            @else
+                                <div class="flex items-center gap-1">
+                                    <flux:icon.hashtag class="w-3.5 h-3.5" />
+                                    <span>{{ (float) $addr['duration_hours'] }} {{ __('units') }}</span>
+                                </div>
+                                <div class="flex items-center gap-1">
+                                    <flux:icon.banknotes class="w-3.5 h-3.5" />
+                                    <span>{{ Number::currency($addr['hourly_rate'], 'GBP') }} ({{ Number::currency($addr['duration_hours'] * $addr['hourly_rate'], 'GBP') }})</span>
+                                </div>
+                            @endif
                             @if($addr['start_date'])
                                 <div class="flex items-center gap-1">
                                     <flux:icon.calendar class="w-3.5 h-3.5" />
@@ -294,7 +338,8 @@ new class extends Component
 
                             <flux:field>
                                 <flux:label>{{ __('Calendar & Location Type') }}</flux:label>
-                                <flux:select wire:model="calendar_id" required>
+                                <flux:select wire:model="calendar_id" placeholder="{{ __('Select a calendar...') }}" required>
+                                    <flux:select.option value="">{{ __('Select a calendar...') }}</flux:select.option>
                                     @foreach($this->calendars as $cal)
                                         <flux:select.option value="{{ $cal->id }}">{{ $cal->name }}</flux:select.option>
                                     @endforeach
@@ -330,13 +375,25 @@ new class extends Component
                             </flux:field>
                         </div>
 
+                        <flux:field>
+                            <flux:label>{{ __('Billing Type') }}</flux:label>
+                            <flux:select wire:model.live="billing_type" required>
+                                <flux:select.option value="hourly">{{ __('Hourly') }}</flux:select.option>
+                                <flux:select.option value="unit">{{ __('Unit') }}</flux:select.option>
+                            </flux:select>
+                        </flux:field>
+
                         <div class="grid grid-cols-2 gap-4">
                             <flux:field>
-                                <flux:label>{{ __('Hours Duration') }}</flux:label>
-                                <flux:input type="number" step="0.01" wire:model="duration_hours" required />
+                                <flux:label>{{ $billing_type === 'hourly' ? __('Hours Duration') : __('Quantity') }}</flux:label>
+                                @if($billing_type === 'hourly')
+                                    <flux:input type="time" wire:model="duration_hours" placeholder="Ex: 02:30" required wire:key="duration-hours-time" />
+                                @else
+                                    <flux:input type="text" wire:model="duration_hours" placeholder="Ex: 1, 2, 5" required wire:key="duration-hours-text" />
+                                @endif
                             </flux:field>
                             <flux:field>
-                                <flux:label>{{ __('Hourly Rate') }}</flux:label>
+                                <flux:label>{{ $billing_type === 'hourly' ? __('Hourly Rate') : __('Unit Price') }}</flux:label>
                                 <flux:input type="number" step="0.01" wire:model="hourly_rate" icon="banknotes" required />
                             </flux:field>
                         </div>
@@ -366,14 +423,16 @@ new class extends Component
                                     </flux:field>
                                 </div>
 
-                                <flux:field>
-                                    <flux:label>{{ __('Assigned Team') }}</flux:label>
-                                    <div class="mt-2 space-y-2 max-h-36 overflow-y-auto border border-zinc-200 dark:border-zinc-800 rounded-lg p-3 bg-zinc-50/50 dark:bg-zinc-950/20">
-                                        @foreach($this->collaborators as $collab)
-                                            <flux:checkbox wire:model="schedules.{{ $idx }}.user_ids" value="{{ $collab->id }}" label="{{ $collab->name }}" />
-                                        @endforeach
-                                    </div>
-                                </flux:field>
+                                @if($billing_type === 'hourly')
+                                    <flux:field>
+                                        <flux:label>{{ __('Assigned Team') }}</flux:label>
+                                        <div class="mt-2 space-y-2 max-h-36 overflow-y-auto border border-zinc-200 dark:border-zinc-800 rounded-lg p-3 bg-zinc-50/50 dark:bg-zinc-950/20">
+                                            @foreach($this->collaborators as $collab)
+                                                <flux:checkbox wire:model="schedules.{{ $idx }}.user_ids" value="{{ $collab->id }}" label="{{ $collab->name }}" />
+                                            @endforeach
+                                        </div>
+                                    </flux:field>
+                                @endif
 
                                 <div class="grid grid-cols-2 gap-4">
                                     <flux:field>

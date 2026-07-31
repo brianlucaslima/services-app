@@ -438,5 +438,8 @@
     "Calendar & Location Type": "Calendário & Tipo de Local",
     "All Calendars": "Todos os Calendários",
     "Generated from Quote": "Gerado a partir de Orçamento",
-    "This invoice was generated from Quote :number on :date.": "Esta fatura foi gerada a partir do Orçamento :number em :date."
+    "This invoice was generated from Quote :number on :date.": "Esta fatura foi gerada a partir do Orçamento :number em :date.",
+    "Unit": "UND",
+    "units": "UND",
+    "unit": "und"
 }

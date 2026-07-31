@@ -100,8 +100,9 @@ new class extends Component
                 'service_type_id' => $item->service_type_id,
                 'description' => $item->description,
                 'notes' => $item->notes ?? '',
-                'quantity' => (float) $item->quantity,
+                'quantity' => $item->billing_type === 'hourly' ? \App\Brain\Helpers\TimeHelper::decimalToColon((float) $item->quantity) : (float) $item->quantity,
                 'unit_price' => (float) $item->unit_price,
+                'billing_type' => $item->billing_type ?? 'hourly',
             ];
         }
 
@@ -116,6 +117,7 @@ new class extends Component
             'notes' => '',
             'quantity' => 1,
             'unit_price' => 0.00,
+            'billing_type' => 'hourly',
         ];
     }
 
@@ -144,10 +146,31 @@ new class extends Component
                 $this->items[$index]['description'] = '';
             }
         }
+
+        if (str_contains($key, 'billing_type')) {
+            $parts = explode('.', $key);
+            $index = (int) $parts[0];
+            $billingType = $this->items[$index]['billing_type'];
+            $quantity = $this->items[$index]['quantity'] ?? 0;
+
+            if ($billingType === 'hourly') {
+                $this->items[$index]['quantity'] = \App\Brain\Helpers\TimeHelper::decimalToColon($quantity);
+            } else {
+                $this->items[$index]['quantity'] = \App\Brain\Helpers\TimeHelper::humanToDecimal($quantity);
+            }
+        }
     }
 
     public function save(): void
     {
+        foreach ($this->items as $idx => $item) {
+            if (($item['billing_type'] ?? 'hourly') === 'hourly') {
+                $this->items[$idx]['quantity'] = \App\Brain\Helpers\TimeHelper::humanToDecimal($item['quantity']);
+            } else {
+                $this->items[$idx]['quantity'] = (float) $item['quantity'];
+            }
+        }
+
         $this->validate([
             'customerId' => 'required',
             'quoteDate' => 'required|date',
@@ -266,6 +289,11 @@ new class extends Component
         $this->expiryDate = now()->addDays(14)->format('Y-m-d');
         $this->notes = '';
         $this->items = [];
+    }
+
+    public function parseQuantity(string|float|int|null $value): float
+    {
+        return \App\Brain\Helpers\TimeHelper::humanToDecimal($value);
     }
 };
 
@@ -464,7 +492,7 @@ new class extends Component
                             <div class="border border-zinc-200 dark:border-zinc-800 p-5 rounded-2xl relative space-y-4 bg-zinc-50/50 dark:bg-zinc-950/20 shadow-xs" :key="'item-'.$idx">
                                 <div class="grid grid-cols-12 gap-4 items-end">
                                     <!-- Service Type Select -->
-                                    <div class="col-span-12 {{ empty($item['service_type_id']) ? 'md:col-span-3' : 'md:col-span-6' }} transition-all duration-200">
+                                    <div class="col-span-12 {{ empty($item['service_type_id']) ? 'md:col-span-2' : 'md:col-span-4' }} transition-all duration-200">
                                         <flux:field>
                                             <flux:label>{{ __('Service Type') }}</flux:label>
                                             <flux:select wire:model.live="items.{{ $idx }}.service_type_id">
@@ -478,7 +506,7 @@ new class extends Component
 
                                     <!-- Service Name Input (only shown if Custom Item is selected) -->
                                     @if(empty($item['service_type_id']))
-                                        <div class="col-span-12 md:col-span-3 transition-all duration-200">
+                                        <div class="col-span-12 md:col-span-2 transition-all duration-200">
                                             <flux:field>
                                                 <flux:label>{{ __('Service') }}</flux:label>
                                                 <flux:input wire:model="items.{{ $idx }}.description" required />
@@ -486,27 +514,42 @@ new class extends Component
                                         </div>
                                     @endif
 
+                                    <!-- Billing Type Select -->
+                                    <div class="col-span-12 md:col-span-2">
+                                        <flux:field>
+                                            <flux:label>{{ __('Billing Type') }}</flux:label>
+                                            <flux:select wire:model.live="items.{{ $idx }}.billing_type">
+                                                <flux:select.option value="hourly">{{ __('Hourly') }}</flux:select.option>
+                                                <flux:select.option value="unit">{{ __('Unit') }}</flux:select.option>
+                                            </flux:select>
+                                        </flux:field>
+                                    </div>
+
                                     <!-- Hours / Quantity -->
                                     <div class="col-span-4 md:col-span-2">
                                         <flux:field>
-                                            <flux:label>{{ __('Hours/Qty') }}</flux:label>
-                                            <flux:input type="number" step="0.01" wire:model.live="items.{{ $idx }}.quantity" required />
+                                            <flux:label>{{ ($item['billing_type'] ?? 'hourly') === 'hourly' ? __('Hours') : __('Quantity') }}</flux:label>
+                                            @if(($item['billing_type'] ?? 'hourly') === 'hourly')
+                                                <flux:input type="time" wire:model.live="items.{{ $idx }}.quantity" placeholder="Ex: 02:30" required wire:key="quote-qty-time-{{ $idx }}" />
+                                            @else
+                                                <flux:input type="text" wire:model.live="items.{{ $idx }}.quantity" placeholder="Ex: 10" required wire:key="quote-qty-text-{{ $idx }}" />
+                                            @endif
                                         </flux:field>
                                     </div>
 
                                     <!-- Unit Price -->
                                     <div class="col-span-4 md:col-span-2">
                                         <flux:field>
-                                            <flux:label>{{ __('Unit Price') }}</flux:label>
+                                            <flux:label>{{ ($item['billing_type'] ?? 'hourly') === 'hourly' ? __('Hourly Rate') : __('Unit Price') }}</flux:label>
                                             <flux:input type="number" step="0.01" wire:model.live="items.{{ $idx }}.unit_price" icon="banknotes" required />
                                         </flux:field>
                                     </div>
 
-                                    <!-- Total Sum Display -->
+                                    <!-- Total Display -->
                                     <div class="col-span-4 md:col-span-2 text-right pr-2 pb-2">
                                         <span class="block text-xs text-zinc-500 uppercase font-semibold">{{ __('Total') }}</span>
                                         <span class="block text-base font-bold text-zinc-950 dark:text-white mt-1">
-                                            {{ Number::currency(((float)($item['quantity'] ?? 0)) * ((float)($item['unit_price'] ?? 0)), 'GBP') }}
+                                            {{ Number::currency($this->parseQuantity($item['quantity'] ?? 0) * ((float)($item['unit_price'] ?? 0)), 'GBP') }}
                                         </span>
                                     </div>
                                 </div>

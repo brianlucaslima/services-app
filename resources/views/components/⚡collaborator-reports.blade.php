@@ -206,8 +206,12 @@ new class extends Component
                                 <span class="block text-xs text-zinc-500">{{ __('House') }}: {{ Number::currency($collab['hourly_rate_house'], 'GBP') }}/h</span>
                                 <span class="block text-xs text-zinc-500">{{ __('Office') }}: {{ Number::currency($collab['hourly_rate_office'], 'GBP') }}/h</span>
                             </flux:table.cell>
-                            <flux:table.cell class="font-medium">
-                                {{ number_format($collab['hours'], 2) }}h ({{ $collab['services_count'] }} {{ __('services') }})
+                             <flux:table.cell class="font-medium">
+                                <div>{{ \App\Brain\Helpers\TimeHelper::decimalToColon($collab['hours']) }}h</div>
+                                @if(($collab['units'] ?? 0) > 0)
+                                    <div class="text-xs text-zinc-500 font-normal mt-0.5">+ {{ number_format($collab['units'], 2) }} {{ __('units') }}</div>
+                                @endif
+                                <div class="text-xs text-zinc-400 font-normal mt-0.5">({{ $collab['services_count'] }} {{ __('services') }})</div>
                             </flux:table.cell>
                             <flux:table.cell class="font-bold text-red-600 dark:text-red-400">
                                 {{ Number::currency($collab['payout'], 'GBP') }}
@@ -258,7 +262,14 @@ new class extends Component
             </div>
             <div class="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-2xl p-6 shadow-sm flex flex-col justify-between">
                 <span class="text-xs text-zinc-500 uppercase tracking-wider">{{ __('Total Hours Work') }}</span>
-                <span class="text-3xl font-extrabold text-zinc-950 dark:text-white mt-1">{{ number_format(collect($detailServices)->sum('share_hours'), 2) }}h</span>
+                <span class="text-3xl font-extrabold text-zinc-950 dark:text-white mt-1">
+                    {{ \App\Brain\Helpers\TimeHelper::decimalToColon(collect($detailServices)->where('billing_type', 'hourly')->sum('share_hours')) }}h
+                    @if(collect($detailServices)->where('billing_type', 'unit')->isNotEmpty())
+                        <span class="text-sm font-normal text-zinc-500 block mt-1">
+                            + {{ number_format(collect($detailServices)->where('billing_type', 'unit')->sum('share_hours'), 2) }} {{ __('units') }}
+                        </span>
+                    @endif
+                </span>
             </div>
             <div class="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-2xl p-6 shadow-sm flex flex-col justify-between">
                 <span class="text-xs text-zinc-500 uppercase tracking-wider">{{ __('Total Amount to Pay') }}</span>
@@ -312,9 +323,13 @@ new class extends Component
                             <td class="px-4 py-4">
                                 <flux:badge size="sm" :color="$service['location_type'] === 'house' ? 'zinc' : 'blue'">{{ __($service['location_type']) }}</flux:badge>
                             </td>
-                            <td class="px-4 py-4 font-semibold text-zinc-950 dark:text-white">
-                                {{ number_format($service['share_hours'], 2) }}h <span class="text-xs font-normal text-zinc-400">/ {{ number_format($service['total_duration'], 2) }}h</span>
-                            </td>
+                              <td class="px-4 py-4 font-semibold text-zinc-950 dark:text-white">
+                                @if(($service['billing_type'] ?? 'hourly') === 'hourly')
+                                    {{ \App\Brain\Helpers\TimeHelper::decimalToColon($service['share_hours']) }}h <span class="text-xs font-normal text-zinc-400">/ {{ \App\Brain\Helpers\TimeHelper::decimalToColon($service['total_duration']) }}h</span>
+                                @else
+                                    {{ number_format($service['share_hours'], 2) }} <span class="text-xs font-normal text-zinc-400">/ {{ number_format($service['total_duration'], 2) }}</span>
+                                @endif
+                             </td>
                             <td class="px-4 py-4">
                                 <flux:badge size="sm" :color="$service['payout_status'] === 'paid' ? 'emerald' : 'zinc'">{{ __($service['payout_status']) }}</flux:badge>
                             </td>

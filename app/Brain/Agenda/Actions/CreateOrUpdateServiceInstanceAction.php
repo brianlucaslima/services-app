@@ -18,6 +18,9 @@ use Brain\Action;
  * @property-read string|null $time
  * @property-read string $status
  * @property-read string|null $notes
+ * @property-read float|null $durationHours
+ * @property-read float|null $hourlyRate
+ * @property-read array|null $userIds
  * @property int $instanceId
  */
 class CreateOrUpdateServiceInstanceAction extends Action
@@ -29,6 +32,9 @@ class CreateOrUpdateServiceInstanceAction extends Action
             'originalDate' => 'required|date',
             'companyId' => 'required|exists:companies,id',
             'status' => 'required|in:completed,skipped,scheduled',
+            'durationHours' => 'nullable|numeric|min:0',
+            'hourlyRate' => 'nullable|numeric|min:0',
+            'userIds' => 'nullable|array',
         ];
     }
 
@@ -60,14 +66,16 @@ class CreateOrUpdateServiceInstanceAction extends Action
                 'description' => $description,
                 'date' => $this->date ?? ($instance->date ?? $this->originalDate),
                 'time' => $this->time ?? ($instance->time ?? $schedule->start_time),
-                'duration_hours' => $schedule->address->duration_hours,
-                'hourly_rate' => $schedule->address->hourly_rate,
+                'duration_hours' => $this->durationHours ?? ($instance->duration_hours ?? $schedule->address->duration_hours),
+                'hourly_rate' => $this->hourlyRate ?? ($instance->hourly_rate ?? $schedule->address->hourly_rate),
                 'status' => $this->status,
                 'notes' => $this->notes,
+                'billing_type' => $schedule->address->billing_type ?? 'hourly',
             ]
         );
 
-        $completedInstance->users()->sync($schedule->users()->pluck('users.id')->toArray());
+        $userIds = $this->userIds ?? ($instance ? $instance->users()->pluck('users.id')->toArray() : $schedule->users()->pluck('users.id')->toArray());
+        $completedInstance->users()->sync($userIds);
 
         $this->instanceId = $completedInstance->id;
 
