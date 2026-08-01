@@ -6,7 +6,7 @@
 
         <title>{{ __('Welcome') }} - {{ config('app.name', 'Invo Ease') }}</title>
 
-        <link rel="icon" href="/favicon.ico" sizes="any">
+        <link rel="icon" href="/favicon.png" sizes="any">
         <link rel="icon" href="/favicon.svg" type="image/svg+xml">
         <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 
@@ -19,10 +19,7 @@
         <header class="border-b border-zinc-200/80 dark:border-zinc-800/50 bg-white/80 dark:bg-zinc-900/80 backdrop-blur sticky top-0 z-50">
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
                 <div class="flex items-center gap-3">
-                    <div class="w-9 h-9 rounded-xl bg-zinc-900 dark:bg-white flex items-center justify-center text-white dark:text-zinc-900 font-extrabold text-lg shadow-sm">
-                        E
-                    </div>
-                    <span class="font-bold text-lg tracking-tight text-zinc-900 dark:text-white">Invo Ease</span>
+                    <x-app-logo-icon-text-white class="h-10 w-auto" />
                 </div>
 
                 <nav class="flex items-center gap-4">
