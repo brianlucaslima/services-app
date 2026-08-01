@@ -670,3 +670,54 @@ test('invoice details automatically creates and links a service instance when ad
 
     expect($instance->users->pluck('id')->toArray())->toContain($collab->id);
 });
+
+test('user can edit due date and notes of an invoice after it has been issued', function () {
+    // 1. Setup company, user, and customer
+    $user = User::factory()->create([
+        'role' => 'management',
+    ]);
+    $company = Company::create([
+        'user_id' => $user->id,
+        'name' => 'Invoease HQ',
+        'email' => 'hq@invoease.co.uk',
+    ]);
+    $user->update(['company_id' => $company->id]);
+    $user->refresh();
+
+    $customer = Customer::create([
+        'company_id' => $company->id,
+        'name' => 'John Doe',
+        'email' => 'john@example.com',
+    ]);
+
+    $invoice = Invoice::create([
+        'company_id' => $company->id,
+        'customer_id' => $customer->id,
+        'number' => '0003',
+        'date' => now(),
+        'due_date' => now()->addDays(7),
+        'status' => 'sent',
+        'total_amount' => 100.00,
+        'notes' => 'Original Notes',
+    ]);
+
+    $this->actingAs($user);
+
+    $newDueDate = now()->addDays(14)->format('Y-m-d');
+
+    Livewire::test('invoices')
+        ->set('selectedInvoiceId', $invoice->id)
+        ->set('screen', 'detail')
+        ->call('openEditInfoModal')
+        ->assertSet('showEditInfoModal', true)
+        ->assertSet('editInfoDueDate', $invoice->due_date->format('Y-m-d'))
+        ->assertSet('editInfoNotes', 'Original Notes')
+        ->set('editInfoDueDate', $newDueDate)
+        ->set('editInfoNotes', 'Updated Notes')
+        ->call('saveInvoiceInfo')
+        ->assertSet('showEditInfoModal', false);
+
+    $invoice = $invoice->fresh();
+    expect($invoice->due_date->format('Y-m-d'))->toBe($newDueDate)
+        ->and($invoice->notes)->toBe('Updated Notes');
+});

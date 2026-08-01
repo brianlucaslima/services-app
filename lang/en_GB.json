@@ -367,5 +367,9 @@
     "Go back to Dashboard": "Go back to Dashboard",
     "Unit": "Unit",
     "units": "units",
-    "unit": "unit"
+    "unit": "unit",
+    "Edit Due Date & Notes": "Edit Due Date & Notes",
+    "Update the due date and notes for this invoice.": "Update the due date and notes for this invoice.",
+    "Invoice details updated successfully.": "Invoice details updated successfully.",
+    "Save Changes": "Save Changes"
 }

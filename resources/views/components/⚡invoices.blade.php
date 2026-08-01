@@ -23,6 +23,11 @@ new class extends Component
     // Edit Invoice State
     public ?int $editingInvoiceId = null;
 
+    // Edit Invoice Info State (for post-emission)
+    public bool $showEditInfoModal = false;
+    public $editInfoDueDate;
+    public string $editInfoNotes = '';
+
     // Screens: 'list', 'select_customer', 'select_services', 'detail'
     public string $screen = 'list';
     public ?int $selectedInvoiceId = null;
@@ -447,6 +452,32 @@ new class extends Component
             ->toArray();
 
         $this->screen = 'select_services';
+    }
+
+    public function openEditInfoModal(): void
+    {
+        $invoice = auth()->user()->company->invoices()->findOrFail($this->selectedInvoiceId);
+        $this->editInfoDueDate = $invoice->due_date ? $invoice->due_date->format('Y-m-d') : '';
+        $this->editInfoNotes = $invoice->notes ?? '';
+        $this->showEditInfoModal = true;
+    }
+
+    public function saveInvoiceInfo(): void
+    {
+        $this->validate([
+            'editInfoDueDate' => 'nullable|date',
+            'editInfoNotes' => 'nullable|string',
+        ]);
+
+        $invoice = auth()->user()->company->invoices()->findOrFail($this->selectedInvoiceId);
+        $invoice->update([
+            'due_date' => $this->editInfoDueDate ?: null,
+            'notes' => $this->editInfoNotes ?: null,
+        ]);
+
+        $this->showEditInfoModal = false;
+        $this->refreshInvoices();
+        Flux::toast(variant: 'success', text: __('Invoice details updated successfully.'));
     }
 
     public function backFromSelectServices(): void
@@ -1040,6 +1071,7 @@ new class extends Component
                         <flux:button wire:click="editInvoice" variant="outline" icon="pencil">{{ __('Edit Invoice') }}</flux:button>
                         <flux:button wire:click="issueInvoice" variant="primary" icon="check">{{ __('Issue Invoice') }}</flux:button>
                     @else
+                        <flux:button wire:click="openEditInfoModal" variant="outline" icon="pencil">{{ __('Edit Due Date & Notes') }}</flux:button>
                         <flux:button wire:click="checkBeforeSendEmail" variant="outline" icon="paper-airplane">{{ __('Send by Email') }}</flux:button>
                     @endif
 
@@ -1350,5 +1382,33 @@ new class extends Component
                 <flux:button wire:click="confirmSendEmail" variant="primary">{{ __('Send Again') }}</flux:button>
             </div>
         </div>
+    </flux:modal>
+
+    <!-- Edit Invoice Info Modal -->
+    <flux:modal wire:model="showEditInfoModal" class="md:w-[480px]">
+        <form wire:submit="saveInvoiceInfo" class="space-y-6">
+            <div>
+                <flux:heading size="lg">{{ __('Edit Due Date & Notes') }}</flux:heading>
+                <flux:subheading>{{ __('Update the due date and notes for this invoice.') }}</flux:subheading>
+            </div>
+
+            <div class="space-y-4">
+                <flux:field>
+                    <flux:label>{{ __('Due Date') }}</flux:label>
+                    <flux:input type="date" wire:model="editInfoDueDate" />
+                </flux:field>
+
+                <flux:field>
+                    <flux:label>{{ __('Message / Notes') }}</flux:label>
+                    <flux:textarea wire:model="editInfoNotes" rows="4" placeholder="{{ __('Add a message that will appear on this invoice...') }}" />
+                </flux:field>
+            </div>
+
+            <div class="flex gap-2">
+                <flux:spacer />
+                <flux:button wire:click="$set('showEditInfoModal', false)" variant="ghost">{{ __('Cancel') }}</flux:button>
+                <flux:button type="submit" variant="primary">{{ __('Save Changes') }}</flux:button>
+            </div>
+        </form>
     </flux:modal>
 </div>

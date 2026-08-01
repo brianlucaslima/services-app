@@ -441,5 +441,9 @@
     "This invoice was generated from Quote :number on :date.": "Esta fatura foi gerada a partir do Orçamento :number em :date.",
     "Unit": "UND",
     "units": "UND",
-    "unit": "und"
+    "unit": "und",
+    "Edit Due Date & Notes": "Editar Vencimento e Obs.",
+    "Update the due date and notes for this invoice.": "Atualize a data de vencimento e as observações desta fatura.",
+    "Invoice details updated successfully.": "Detalhes da fatura atualizados com sucesso.",
+    "Save Changes": "Salvar Alterações"
 }
