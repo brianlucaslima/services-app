@@ -11,18 +11,23 @@ use Brain\Query;
 class GetTopCollaboratorsQuery extends Query
 {
     public function __construct(
-        public int $companyId
+        public int $companyId,
+        public ?int $month = null,
+        public ?int $year = null
     ) {}
 
     public function handle(): array
     {
+        $month = $this->month ?? (int) now()->month;
+        $year = $this->year ?? (int) now()->year;
+
         $company = Company::findOrFail($this->companyId);
         $collaborators = $company->users()->get();
 
         $completedInstancesThisMonth = ServiceInstance::where('company_id', $this->companyId)
             ->where('status', 'completed')
-            ->whereMonth('date', now()->month)
-            ->whereYear('date', now()->year)
+            ->whereMonth('date', $month)
+            ->whereYear('date', $year)
             ->with(['users', 'address'])
             ->get();
 

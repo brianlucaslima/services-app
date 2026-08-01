@@ -69,7 +69,7 @@ test('dashboard component displays management metrics and lists for management r
         ->assertSee(__('Completed Services'))
         ->assertSee('John Doe')
         ->assertSee('Main Office')
-        ->assertSee(__('Top Collaborators This Month'))
+        ->assertSee(__('Top Collaborators'))
         ->assertSee($collab->name);
 });
 
@@ -132,5 +132,5 @@ test('dashboard component displays collaborator metrics and lists for collaborat
         ->assertSee(__('Your Schedules'))
         ->assertSee('Main Office')
         ->assertDontSee(__('Monthly Revenue'))
-        ->assertDontSee(__('Top Collaborators This Month'));
+        ->assertDontSee(__('Top Collaborators'));
 });

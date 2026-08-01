@@ -15,17 +15,22 @@ class GetDashboardMetricsQuery extends Query
     public function __construct(
         public int $companyId,
         public int $userId,
-        public string $role
+        public string $role,
+        public ?int $month = null,
+        public ?int $year = null
     ) {}
 
     public function handle(): array
     {
+        $month = $this->month ?? (int) now()->month;
+        $year = $this->year ?? (int) now()->year;
+
         if ($this->role === 'management') {
             // 1. Monthly Revenue (Paid & Sent invoices this month)
             $monthlyRevenue = Invoice::where('company_id', $this->companyId)
                 ->whereIn('status', ['paid', 'sent'])
-                ->whereMonth('date', now()->month)
-                ->whereYear('date', now()->year)
+                ->whereMonth('date', $month)
+                ->whereYear('date', $year)
                 ->sum('total_amount');
 
             // 2. Pending Payouts (Unpaid completed services for all collaborators)
@@ -55,8 +60,8 @@ class GetDashboardMetricsQuery extends Query
             // 4. Completed Services This Month
             $completedServices = ServiceInstance::where('company_id', $this->companyId)
                 ->where('status', 'completed')
-                ->whereMonth('date', now()->month)
-                ->whereYear('date', now()->year)
+                ->whereMonth('date', $month)
+                ->whereYear('date', $year)
                 ->count();
 
             return [
@@ -73,8 +78,8 @@ class GetDashboardMetricsQuery extends Query
         // 1. Completed Hours this month
         $collabInstancesThisMonth = ServiceInstance::where('company_id', $this->companyId)
             ->where('status', 'completed')
-            ->whereMonth('date', now()->month)
-            ->whereYear('date', now()->year)
+            ->whereMonth('date', $month)
+            ->whereYear('date', $year)
             ->whereHas('users', fn ($q) => $q->where('users.id', $this->userId))
             ->with(['users', 'address'])
             ->get();

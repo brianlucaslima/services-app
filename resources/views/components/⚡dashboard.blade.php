@@ -10,11 +10,17 @@ use Illuminate\Support\Carbon;
 
 new class extends Component
 {
+    public ?int $filterMonth = null;
+    public ?int $filterYear = null;
+
     public function mount(): void
     {
         if (auth()->user()->role === 'superadmin') {
             $this->redirect(route('superadmin'), navigate: true);
         }
+
+        $this->filterMonth = (int) now()->month;
+        $this->filterYear = (int) now()->year;
     }
 
     public function rendering($view): void
@@ -46,7 +52,9 @@ new class extends Component
         return \App\Brain\Queries\GetDashboardMetricsQuery::run(
             companyId: (int) auth()->user()->company_id,
             userId: auth()->id(),
-            role: auth()->user()->role
+            role: auth()->user()->role,
+            month: $this->filterMonth,
+            year: $this->filterYear
         );
     }
 
@@ -95,7 +103,9 @@ new class extends Component
         }
 
         return \App\Brain\Queries\GetTopCollaboratorsQuery::run(
-            companyId: auth()->user()->company_id
+            companyId: auth()->user()->company_id,
+            month: $this->filterMonth,
+            year: $this->filterYear
         );
     }
 };
@@ -104,7 +114,7 @@ new class extends Component
 
 <div class="mx-auto max-w-none w-full px-4 sm:px-6 lg:px-8 space-y-8 pb-24">
     <!-- Header Greeting -->
-    <header class="flex items-center justify-between sm:px-0">
+    <header class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 sm:px-0">
         <div>
             <h1 class="text-3xl font-bold tracking-tight text-zinc-900 dark:text-white">
                 {{ __('Hello, :name!', ['name' => auth()->user()->name]) }}
@@ -117,7 +127,26 @@ new class extends Component
                 @endif
             </p>
         </div>
+
+        <!-- Month and Year Filters -->
+        <div class="flex items-center gap-3">
+            <flux:select wire:model.live="filterMonth" class="w-40" size="sm">
+                @foreach(range(1, 12) as $m)
+                    <flux:select.option value="{{ $m }}">{{ \Illuminate\Support\Carbon::create(null, $m, 1)->translatedFormat('F') }}</flux:select.option>
+                @endforeach
+            </flux:select>
+
+            <flux:select wire:model.live="filterYear" class="w-28" size="sm">
+                @foreach(range(now()->year - 2, now()->year + 1) as $y)
+                    <flux:select.option value="{{ $y }}">{{ $y }}</flux:select.option>
+                @endforeach
+            </flux:select>
+        </div>
     </header>
+
+    @php
+        $selectedMonthName = \Illuminate\Support\Carbon::create(null, $filterMonth, 1)->translatedFormat('F');
+    @endphp
 
     <!-- Metrics Cards Grid -->
     <div class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
@@ -129,7 +158,7 @@ new class extends Component
                     <h3 class="text-2xl font-bold text-zinc-900 dark:text-white mt-1">{{ Number::currency($this->metrics['monthlyRevenue'], 'GBP') }}</h3>
                 </div>
                 <div class="text-xs text-emerald-600 dark:text-emerald-400 font-medium">
-                    {{ __('Invoiced in :month', ['month' => now()->translatedFormat('F')]) }}
+                    {{ __('Invoiced in :month', ['month' => $selectedMonthName]) }}
                 </div>
                 <div class="absolute right-4 top-4 text-emerald-500/20">
                     <svg class="w-8 h-8" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
@@ -171,7 +200,7 @@ new class extends Component
                     <h3 class="text-2xl font-bold text-zinc-900 dark:text-white mt-1">{{ $this->metrics['completedServices'] }}</h3>
                 </div>
                 <div class="text-xs text-purple-600 dark:text-purple-400 font-medium">
-                    {{ __('Services completed this month') }}
+                    {{ __('Services completed in :month', ['month' => $selectedMonthName]) }}
                 </div>
                 <div class="absolute right-4 top-4 text-purple-500/20">
                     <svg class="w-8 h-8" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
@@ -186,7 +215,7 @@ new class extends Component
                     <h3 class="text-2xl font-bold text-zinc-900 dark:text-white mt-1">{{ number_format($this->metrics['completedHours'], 2) }}h</h3>
                 </div>
                 <div class="text-xs text-emerald-600 dark:text-emerald-400 font-medium">
-                    {{ __('Completed hours in :month', ['month' => now()->translatedFormat('F')]) }}
+                    {{ __('Completed hours in :month', ['month' => $selectedMonthName]) }}
                 </div>
                 <div class="absolute right-4 top-4 text-emerald-500/20">
                     <svg class="w-8 h-8" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
@@ -200,7 +229,7 @@ new class extends Component
                     <h3 class="text-2xl font-bold text-zinc-900 dark:text-white mt-1">{{ Number::currency($this->metrics['earningsThisMonth'], 'GBP') }}</h3>
                 </div>
                 <div class="text-xs text-blue-600 dark:text-blue-400 font-medium">
-                    {{ __('Earnings this month based on your rate') }}
+                    {{ __('Earnings in :month based on your rate', ['month' => $selectedMonthName]) }}
                 </div>
                 <div class="absolute right-4 top-4 text-blue-500/20">
                     <svg class="w-8 h-8" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
@@ -355,10 +384,10 @@ new class extends Component
 
         <!-- Sidebar list columns -->
         <div class="space-y-6">
-            <!-- Top Collaborators (Management only) -->
+            <!-- List of top collabs (Management only) -->
             @if ($this->isManagement)
                 <div class="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-5 shadow-sm space-y-4">
-                    <h2 class="text-lg font-bold text-zinc-900 dark:text-white">{{ __('Top Collaborators This Month') }}</h2>
+                    <h2 class="text-lg font-bold text-zinc-900 dark:text-white">{{ __('Top Collaborators') }} ({{ $selectedMonthName }})</h2>
                     <div class="divide-y divide-zinc-100 dark:divide-zinc-800">
                         @forelse($this->topCollaborators as $item)
                             <div class="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
