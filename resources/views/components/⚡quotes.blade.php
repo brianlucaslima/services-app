@@ -530,7 +530,7 @@ new class extends Component
                                         <flux:field>
                                             <flux:label>{{ ($item['billing_type'] ?? 'hourly') === 'hourly' ? __('Hours') : __('Quantity') }}</flux:label>
                                             @if(($item['billing_type'] ?? 'hourly') === 'hourly')
-                                                <flux:input type="time" wire:model.live="items.{{ $idx }}.quantity" placeholder="Ex: 02:30" required wire:key="quote-qty-time-{{ $idx }}" />
+                                                <flux:input type="text" wire:model.live="items.{{ $idx }}.quantity" placeholder="Ex: 02:30" required wire:key="quote-qty-time-{{ $idx }}" />
                                             @else
                                                 <flux:input type="text" wire:model.live="items.{{ $idx }}.quantity" placeholder="Ex: 10" required wire:key="quote-qty-text-{{ $idx }}" />
                                             @endif

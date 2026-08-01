@@ -1313,7 +1313,7 @@ new class extends Component
                     <flux:field>
                         <flux:label>{{ $manualBillingType === 'hourly' ? __('Hours') : __('Quantity') }}</flux:label>
                         @if($manualBillingType === 'hourly')
-                            <flux:input type="time" wire:model="manualHours" placeholder="Ex: 02:30" required wire:key="manual-hours-time" />
+                            <flux:input type="text" wire:model="manualHours" placeholder="Ex: 02:30" required wire:key="manual-hours-time" />
                         @else
                             <flux:input type="text" wire:model="manualHours" placeholder="Ex: 1, 2, 5" required wire:key="manual-hours-text" />
                         @endif

@@ -749,7 +749,7 @@ new class extends Component
                     <flux:field>
                         <flux:label>{{ $completionBillingType === 'hourly' ? __('Hours') : __('Quantity') }}</flux:label>
                         @if($completionBillingType === 'hourly')
-                            <flux:input type="time" wire:model="completionHours" placeholder="Ex: 02:30" required wire:key="completion-hours-time" />
+                            <flux:input type="text" wire:model="completionHours" placeholder="Ex: 02:30" required wire:key="completion-hours-time" />
                         @else
                             <flux:input type="number" step="0.01" wire:model="completionHours" placeholder="Ex: 5" required wire:key="completion-hours-number" />
                         @endif
