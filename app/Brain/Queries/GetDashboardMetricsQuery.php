@@ -27,11 +27,19 @@ class GetDashboardMetricsQuery extends Query
 
         if ($this->role === 'management') {
             // 1. Monthly Revenue (Paid & Sent invoices this month)
-            $monthlyRevenue = Invoice::where('company_id', $this->companyId)
-                ->whereIn('status', ['paid', 'sent'])
+            $paidRevenue = Invoice::where('company_id', $this->companyId)
+                ->where('status', 'paid')
                 ->whereMonth('date', $month)
                 ->whereYear('date', $year)
                 ->sum('total_amount');
+
+            $unpaidRevenue = Invoice::where('company_id', $this->companyId)
+                ->where('status', 'sent')
+                ->whereMonth('date', $month)
+                ->whereYear('date', $year)
+                ->sum('total_amount');
+
+            $monthlyRevenue = $paidRevenue + $unpaidRevenue;
 
             // 2. Pending Payouts (Unpaid completed services for all collaborators)
             $instances = ServiceInstance::where('company_id', $this->companyId)
@@ -66,6 +74,8 @@ class GetDashboardMetricsQuery extends Query
 
             return [
                 'monthlyRevenue' => $monthlyRevenue,
+                'paidRevenue' => $paidRevenue,
+                'unpaidRevenue' => $unpaidRevenue,
                 'pendingPayout' => $pendingPayout,
                 'activeCustomers' => $activeCustomers,
                 'completedServices' => $completedServices,

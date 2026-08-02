@@ -40,6 +40,8 @@ new class extends Component
         if (! auth()->user()->company_id) {
             return [
                 'monthlyRevenue' => 0,
+                'paidRevenue' => 0,
+                'unpaidRevenue' => 0,
                 'pendingPayout' => 0,
                 'activeCustomers' => 0,
                 'completedServices' => 0,
@@ -152,14 +154,26 @@ new class extends Component
     <div class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
         @if ($this->isManagement)
             <!-- Monthly Revenue Card -->
-            <div class="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-5 shadow-sm relative overflow-hidden flex flex-col justify-between h-32">
-                <div>
-                    <span class="text-xs font-semibold text-zinc-400 uppercase tracking-wider">{{ __('Monthly Revenue') }}</span>
-                    <h3 class="text-2xl font-bold text-zinc-900 dark:text-white mt-1">{{ Number::currency($this->metrics['monthlyRevenue'], 'GBP') }}</h3>
+            <div class="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-5 shadow-sm relative overflow-hidden flex flex-col justify-between min-h-32">
+                <a href="{{ route('invoices') }}" wire:navigate class="block group">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-semibold text-zinc-400 uppercase tracking-wider group-hover:text-zinc-600 dark:group-hover:text-zinc-300 transition-colors">{{ __('Monthly Revenue') }}</span>
+                        <span class="text-[10px] text-zinc-400 font-medium bg-zinc-50 dark:bg-zinc-800/50 px-2 py-0.5 rounded-lg">{{ $selectedMonthName }}</span>
+                    </div>
+                    <h3 class="text-2xl font-bold text-zinc-900 dark:text-white mt-1 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">{{ Number::currency($this->metrics['monthlyRevenue'], 'GBP') }}</h3>
+                </a>
+                
+                <div class="mt-4 flex items-center justify-between text-[11px] font-medium border-t border-zinc-100 dark:border-zinc-800/60 pt-2.5">
+                    <a href="{{ route('invoices', ['status' => 'paid']) }}" wire:navigate class="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 hover:underline">
+                        <span class="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                        <span>{{ __('Paid (Short)') }}: {{ Number::currency($this->metrics['paidRevenue'], 'GBP') }}</span>
+                    </a>
+                    <a href="{{ route('invoices', ['status' => 'sent']) }}" wire:navigate class="flex items-center gap-1 text-blue-600 dark:text-blue-400 hover:underline">
+                        <span class="inline-block w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+                        <span>{{ __('Unpaid (Short)') }}: {{ Number::currency($this->metrics['unpaidRevenue'], 'GBP') }}</span>
+                    </a>
                 </div>
-                <div class="text-xs text-emerald-600 dark:text-emerald-400 font-medium">
-                    {{ __('Invoiced in :month', ['month' => $selectedMonthName]) }}
-                </div>
+
                 <div class="absolute right-4 top-4 text-emerald-500/20">
                     <svg class="w-8 h-8" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                 </div>

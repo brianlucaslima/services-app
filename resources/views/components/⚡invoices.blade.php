@@ -71,6 +71,12 @@ new class extends Component
         $this->dueDate = now()->addDays(14)->format('Y-m-d');
         $this->manualDate = now()->format('Y-m-d');
 
+        // Check if status is passed as query string to filter invoices list
+        $status = request()->query('status');
+        if ($status && in_array($status, ['draft', 'sent', 'paid', 'cancelled'])) {
+            $this->filterStatus = $status;
+        }
+
         // Check if an invoice secure UUID is passed as query string to show detail screen immediately
         $uuid = request()->query('uuid');
         if ($uuid) {
@@ -637,6 +643,14 @@ new class extends Component
     }
 
     #[Computed]
+    public function pendingReceiptsAmount(): float
+    {
+        return (float) auth()->user()->company->invoices()
+            ->where('status', 'sent')
+            ->sum('total_amount');
+    }
+
+    #[Computed]
     public function manualAddresses()
     {
         if (!$this->selectedCustomerId) {
@@ -737,6 +751,24 @@ new class extends Component
             </div>
             <flux:button wire:click="goToSelectCustomer" variant="primary" icon="plus">{{ __('New Invoice') }}</flux:button>
         </header>
+
+        <!-- Pending Receipt Summary Banner -->
+        @if ($this->pendingReceiptsAmount > 0)
+            <div class="mx-4 sm:mx-0 p-4 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/60 rounded-2xl flex items-center justify-between shadow-xs">
+                <div class="flex items-center gap-3">
+                    <span class="p-2 rounded-xl bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400">
+                        <flux:icon name="clock" variant="outline" class="w-5 h-5" />
+                    </span>
+                    <div>
+                        <span class="text-xs text-zinc-500 dark:text-zinc-400 font-medium uppercase tracking-wider block">{{ __('Total Pending Receipts') }}</span>
+                        <span class="text-lg font-bold text-zinc-900 dark:text-white block mt-0.5">{{ Number::currency($this->pendingReceiptsAmount, 'GBP') }}</span>
+                    </div>
+                </div>
+                <flux:button wire:click="$set('filterStatus', 'sent')" variant="ghost" size="sm" class="text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/30">
+                    {{ __('Filter Unpaid') }}
+                </flux:button>
+            </div>
+        @endif
 
         <!-- Tabs (Invoices vs Email Logs) -->
         <div class="flex w-full rounded-lg bg-zinc-100 p-1 dark:bg-zinc-900/80 sm:w-auto self-start">
