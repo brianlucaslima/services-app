@@ -48,6 +48,7 @@ new class extends Component
     public string $filterEndDate = '';
     public string $filterNumber = '';
     public string $filterStatus = 'all';
+    public string $filterSentSuccess = 'all';
 
     // Manual Service state
     public bool $showManualModal = false;
@@ -98,7 +99,11 @@ new class extends Component
 
     public function refreshInvoices(): void
     {
-        $query = auth()->user()->company->invoices()->with('customer');
+        $query = auth()->user()->company->invoices()
+            ->with('customer')
+            ->withExists(['emailLogs' => function ($query) {
+                $query->where('status', 'success');
+            }]);
 
         if ($this->filterCustomer !== 'all') {
             $query->where('customer_id', $this->filterCustomer);
@@ -118,6 +123,16 @@ new class extends Component
 
         if ($this->filterStatus !== 'all') {
             $query->where('status', $this->filterStatus);
+        }
+
+        if ($this->filterSentSuccess === 'yes') {
+            $query->whereHas('emailLogs', function ($query) {
+                $query->where('status', 'success');
+            });
+        } elseif ($this->filterSentSuccess === 'no') {
+            $query->whereDoesntHave('emailLogs', function ($query) {
+                $query->where('status', 'success');
+            });
         }
 
         $this->invoices = $query->latest()->get()->toArray();
@@ -154,6 +169,7 @@ new class extends Component
     public function updatedFilterEndDate(): void { $this->refreshInvoices(); }
     public function updatedFilterNumber(): void { $this->refreshInvoices(); }
     public function updatedFilterStatus(): void { $this->refreshInvoices(); }
+    public function updatedFilterSentSuccess(): void { $this->refreshInvoices(); }
     public function updatedFilterAddressId(): void { $this->loadPendingServices(); }
 
     public function clearFilters(): void
@@ -163,6 +179,7 @@ new class extends Component
         $this->filterEndDate = '';
         $this->filterNumber = '';
         $this->filterStatus = 'all';
+        $this->filterSentSuccess = 'all';
         $this->refreshInvoices();
     }
 
@@ -782,7 +799,7 @@ new class extends Component
 
         @if ($listTab === 'invoices')
             <!-- Filters panel -->
-            <div class="grid grid-cols-1 sm:grid-cols-5 gap-4 p-4 bg-zinc-50 dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800">
+            <div class="grid grid-cols-1 sm:grid-cols-6 gap-4 p-4 bg-zinc-50 dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800">
             <flux:field>
                 <flux:label>{{ __('Invoice Number') }}</flux:label>
                 <flux:input wire:model.live.debounce.300ms="filterNumber" placeholder="{{ __('0001...') }}" />
@@ -817,6 +834,15 @@ new class extends Component
                     <flux:select.option value="paid">{{ __('Paid') }}</flux:select.option>
                 </flux:select>
             </flux:field>
+
+            <flux:field>
+                <flux:label>{{ __('Email Sent') }}</flux:label>
+                <flux:select wire:model.live="filterSentSuccess" placeholder="{{ __('All') }}">
+                    <flux:select.option value="all">{{ __('All') }}</flux:select.option>
+                    <flux:select.option value="yes">{{ __('Sent Successfully') }}</flux:select.option>
+                    <flux:select.option value="no">{{ __('Not Sent') }}</flux:select.option>
+                </flux:select>
+            </flux:field>
         </div>
 
         <div class="bg-white dark:bg-zinc-900 border-y sm:border border-zinc-200 dark:border-zinc-700 sm:rounded-xl overflow-hidden shadow-sm">
@@ -827,6 +853,7 @@ new class extends Component
                     <flux:table.column class="hidden md:table-cell">{{ __('Date') }}</flux:table.column>
                     <flux:table.column>{{ __('Amount') }}</flux:table.column>
                     <flux:table.column>{{ __('Status') }}</flux:table.column>
+                    <flux:table.column class="hidden sm:table-cell">{{ __('Email Sent') }}</flux:table.column>
                     <flux:table.column></flux:table.column>
                 </flux:table.columns>
 
@@ -846,6 +873,13 @@ new class extends Component
                             <flux:table.cell class="font-semibold">{{ Number::currency($invoice['total_amount'] ?? 0, 'GBP') }}</flux:table.cell>
                             <flux:table.cell>
                                 <flux:badge :color="$this->getStatusColor($invoice['status'])" inset="top">{{ __($invoice['status']) }}</flux:badge>
+                            </flux:table.cell>
+                            <flux:table.cell class="hidden sm:table-cell">
+                                @if(!empty($invoice['email_logs_exists']))
+                                    <flux:badge size="sm" color="emerald" inset="top">{{ __('Yes') }}</flux:badge>
+                                @else
+                                    <flux:badge size="sm" color="zinc" inset="top">{{ __('No') }}</flux:badge>
+                                @endif
                             </flux:table.cell>
                             <flux:table.cell>
                                 <flux:dropdown align="end">

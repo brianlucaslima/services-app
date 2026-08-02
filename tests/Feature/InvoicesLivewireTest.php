@@ -721,3 +721,79 @@ test('user can edit due date and notes of an invoice after it has been issued', 
     expect($invoice->due_date->format('Y-m-d'))->toBe($newDueDate)
         ->and($invoice->notes)->toBe('Updated Notes');
 });
+
+test('invoices can be filtered by email sending status', function () {
+    // 1. Setup company and user
+    $user = User::factory()->create([
+        'role' => 'management',
+    ]);
+    $company = Company::create([
+        'user_id' => $user->id,
+        'name' => 'Invoease HQ',
+        'email' => 'hq@invoease.co.uk',
+    ]);
+    $user->update(['company_id' => $company->id]);
+    $user->refresh();
+
+    $customer = Customer::create([
+        'company_id' => $company->id,
+        'name' => 'Robert De Niro',
+        'email' => 'robert@deniro.com',
+    ]);
+
+    $invoiceSent = Invoice::create([
+        'company_id' => $company->id,
+        'customer_id' => $customer->id,
+        'number' => '0001',
+        'date' => now(),
+        'status' => 'sent',
+        'total_amount' => 100.00,
+    ]);
+
+    $invoiceNotSent = Invoice::create([
+        'company_id' => $company->id,
+        'customer_id' => $customer->id,
+        'number' => '0002',
+        'date' => now(),
+        'status' => 'draft',
+        'total_amount' => 150.00,
+    ]);
+
+    // Create a successful email log for invoiceSent
+    EmailLog::create([
+        'company_id' => $company->id,
+        'invoice_id' => $invoiceSent->id,
+        'recipient_email' => $customer->email,
+        'status' => 'success',
+    ]);
+
+    // Create a failed email log for invoiceNotSent (which shouldn't count as success!)
+    EmailLog::create([
+        'company_id' => $company->id,
+        'invoice_id' => $invoiceNotSent->id,
+        'recipient_email' => $customer->email,
+        'status' => 'failed',
+    ]);
+
+    $this->actingAs($user);
+
+    $test = Livewire::test('invoices');
+
+    expect($test->get('invoices'))->toHaveCount(2);
+
+    // Verify HTML contains the new column and values
+    $test->assertSee('Email Sent')
+        ->assertSee('Yes')
+        ->assertSee('No');
+
+    $test->set('filterSentSuccess', 'yes');
+    expect($test->get('invoices'))->toHaveCount(1)
+        ->and($test->get('invoices')[0]['number'])->toBe('0001');
+
+    $test->set('filterSentSuccess', 'no');
+    expect($test->get('invoices'))->toHaveCount(1)
+        ->and($test->get('invoices')[0]['number'])->toBe('0002');
+
+    $test->set('filterSentSuccess', 'all');
+    expect($test->get('invoices'))->toHaveCount(2);
+});
